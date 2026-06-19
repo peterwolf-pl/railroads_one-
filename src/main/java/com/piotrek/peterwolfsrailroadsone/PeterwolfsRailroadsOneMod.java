@@ -14,6 +14,7 @@ public class PeterwolfsRailroadsOneMod implements ModInitializer {
 		ModBlocks.initialize();
 		ModEntities.initialize();
 		ModItems.initialize();
+		RailroadDebugCommand.register();
 		LOGGER.info("Peterwolf's RailRoad's One prototype loaded");
 	}
 
