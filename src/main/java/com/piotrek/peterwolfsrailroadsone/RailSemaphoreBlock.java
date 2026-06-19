@@ -260,19 +260,22 @@ public final class RailSemaphoreBlock extends Block {
 
 			Set<UUID> waitingTrains = new HashSet<>();
 			requests.keySet().forEach(request -> waitingTrains.add(request.trainId()));
+			Set<UUID> presentTrains = new HashSet<>(occupyingTrains);
+			presentTrains.addAll(waitingTrains);
 			this.reservations.entrySet().removeIf(
-				entry -> !reservationRemainsValid(entry, snapshots, requests, waitingTrains)
+				entry -> !reservationRemainsValid(entry, snapshots, presentTrains, waitingTrains)
 			);
 			this.adoptUnreservedOccupants(snapshots, waitingTrains);
 			this.enforceExclusiveReservations(snapshots);
 
-			Set<UUID> grantedTrains = new HashSet<>();
+			Set<UUID> protectedOccupants = new HashSet<>();
 			for (Map.Entry<SectionKey, UUID> reservation : this.reservations.entrySet()) {
 				if (!hasConflictingOccupant(reservation.getKey(), reservation.getValue(), snapshots, waitingTrains)) {
-					grantedTrains.add(reservation.getValue());
+					protectedOccupants.add(reservation.getValue());
 				}
 			}
 
+			Set<UUID> clearedApproaches = new HashSet<>();
 			List<Map.Entry<RequestKey, Approach>> orderedRequests = new ArrayList<>(requests.entrySet());
 			orderedRequests.sort(
 				Comparator.comparingLong((Map.Entry<RequestKey, Approach> entry) -> this.waitingSince.get(entry.getKey()))
@@ -281,16 +284,13 @@ public final class RailSemaphoreBlock extends Block {
 			);
 			for (Map.Entry<RequestKey, Approach> requestEntry : orderedRequests) {
 				RequestKey request = requestEntry.getKey();
-				if (grantedTrains.contains(request.trainId())) {
+				if (clearedApproaches.contains(request.trainId())) {
 					continue;
 				}
-				UUID currentReservation = this.reservations.get(request.section());
-				if (currentReservation != null && !currentReservation.equals(request.trainId())) {
-					continue;
-				}
-				if (this.canReserve(request.section(), request.trainId(), snapshots, waitingTrains)) {
-					this.reservations.put(request.section(), request.trainId());
-					grantedTrains.add(request.trainId());
+				if (this.hasTwoSectionClearance(request, requestEntry.getValue())
+					|| this.tryReserveTwoSections(request, requestEntry.getValue(), snapshots, waitingTrains)) {
+					clearedApproaches.add(request.trainId());
+					protectedOccupants.add(request.trainId());
 				}
 			}
 
@@ -299,7 +299,7 @@ public final class RailSemaphoreBlock extends Block {
 			Set<BlockPos> redApproachSignals = new HashSet<>();
 			Set<BlockPos> greenApproachSignals = new HashSet<>();
 			for (UUID occupyingTrain : occupyingTrains) {
-				if (!grantedTrains.contains(occupyingTrain)) {
+				if (!protectedOccupants.contains(occupyingTrain)) {
 					addEmergencyBrake(level, occupyingTrain, desiredBrakes);
 				}
 			}
@@ -310,7 +310,7 @@ public final class RailSemaphoreBlock extends Block {
 					occupiedSignals.add(section.secondSignal());
 				}
 				for (Approach approach : snapshot.approaches().values()) {
-					if (grantedTrains.contains(approach.trainId())) {
+					if (clearedApproaches.contains(approach.trainId())) {
 						greenApproachSignals.add(approach.signalPos());
 					} else {
 						desiredBrakes.add(approach.locomotive().getUUID());
@@ -407,7 +407,7 @@ public final class RailSemaphoreBlock extends Block {
 		private boolean reservationRemainsValid(
 			final Map.Entry<SectionKey, UUID> reservation,
 			final Map<SectionKey, SectionSnapshot> snapshots,
-			final Map<RequestKey, Approach> requests,
+			final Set<UUID> presentTrains,
 			final Set<UUID> waitingTrains
 		) {
 			SectionSnapshot snapshot = snapshots.get(reservation.getKey());
@@ -415,9 +415,63 @@ public final class RailSemaphoreBlock extends Block {
 				return false;
 			}
 			UUID owner = reservation.getValue();
-			boolean ownerPresent = snapshot.occupyingTrains().contains(owner)
-				|| requests.containsKey(new RequestKey(reservation.getKey(), owner));
-			return ownerPresent && !this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains);
+			return presentTrains.contains(owner)
+				&& !this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains);
+		}
+
+		private boolean hasTwoSectionClearance(final RequestKey request, final Approach approach) {
+			if (!request.trainId().equals(this.reservations.get(request.section()))) {
+				return false;
+			}
+			return this.continuations(request.section(), approach).stream()
+				.anyMatch(section -> request.trainId().equals(this.reservations.get(section.key())));
+		}
+
+		private boolean tryReserveTwoSections(
+			final RequestKey request,
+			final Approach approach,
+			final Map<SectionKey, SectionSnapshot> snapshots,
+			final Set<UUID> waitingTrains
+		) {
+			UUID trainId = request.trainId();
+			UUID currentOwner = this.reservations.get(request.section());
+			if (currentOwner != null && !currentOwner.equals(trainId)
+				|| !this.canReserve(request.section(), trainId, snapshots, waitingTrains)) {
+				return false;
+			}
+
+			this.reservations.put(request.section(), trainId);
+			for (Section continuation : this.continuations(request.section(), approach)) {
+				UUID continuationOwner = this.reservations.get(continuation.key());
+				if ((continuationOwner == null || continuationOwner.equals(trainId))
+					&& this.canReserve(continuation.key(), trainId, snapshots, waitingTrains)) {
+					this.reservations.put(continuation.key(), trainId);
+					return true;
+				}
+			}
+
+			if (currentOwner == null) {
+				this.reservations.remove(request.section(), trainId);
+			}
+			return false;
+		}
+
+		private List<Section> continuations(final SectionKey requestedSection, final Approach approach) {
+			Section current = this.sections.stream()
+				.filter(section -> section.key().equals(requestedSection))
+				.findFirst()
+				.orElse(null);
+			if (current == null) {
+				return List.of();
+			}
+			BlockPos exitSignal = approach.signalPos().equals(current.firstSignal())
+				? current.secondSignal()
+				: current.firstSignal();
+			return this.sections.stream()
+				.filter(section -> !section.key().equals(requestedSection))
+				.filter(section -> section.firstSignal().equals(exitSignal) || section.secondSignal().equals(exitSignal))
+				.sorted(Comparator.comparing(Section::key, SectionKey::compare))
+				.toList();
 		}
 
 		private void adoptUnreservedOccupants(

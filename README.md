@@ -12,6 +12,7 @@ Peterwolf's RailRoad's One is a Fabric prototype mod that adds smooth 3x3 railro
 - Prototype minecart guidance that takes over nearby minecarts and moves them along a quarter-circle path.
 - Ready-to-place locomotive and locomotive-with-minecart items powered by the bundled Minecart Chain module.
 - Rail semaphores that protect connected sections, brake conflicting trains, and emit redstone power while red.
+- Two-section look-ahead clearance: a train moves only after reserving two consecutive protected sections.
 - Fair section reservations at merging tracks so one waiting train is released instead of both remaining stopped.
 - English and Polish translations.
 - Crafting recipes for both curve items.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- A train now receives a green signal only after atomically reserving the requested protected section and the following protected section.
+- Two-track merges retain oldest-request-first arbitration: one train can reserve both required sections while conflicting trains remain braked.
+- Look-ahead reservations remain owned while the train is present in the signalled network, preventing another train from entering the second section early.
+
 ## 0.3.1
 
 - Fixed a safety bug where a train detected anywhere on an overlapping merge section was treated as cleared without owning its reservation.
