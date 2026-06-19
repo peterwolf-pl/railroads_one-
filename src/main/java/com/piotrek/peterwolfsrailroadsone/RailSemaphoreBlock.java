@@ -292,8 +292,8 @@ public final class RailSemaphoreBlock extends Block {
 				if (clearedApproaches.contains(request.trainId())) {
 					continue;
 				}
-				if (this.hasTwoSectionClearance(request, requestEntry.getValue())
-					|| this.tryReserveTwoSections(request, requestEntry.getValue(), snapshots, waitingTrains)) {
+				if (this.hasOneSectionClearance(request)
+					|| this.tryReserveOneSection(request, snapshots, waitingTrains)) {
 					clearedApproaches.add(request.trainId());
 					protectedOccupants.add(request.trainId());
 				}
@@ -470,16 +470,11 @@ public final class RailSemaphoreBlock extends Block {
 						}
 					}
 					
-					// Trace ahead (up to 2 sections)
+					// Trace ahead (up to 1 section)
 					BlockPos front1 = forwardSignal(section, locomotive);
 					Section nextAhead = findConnectedSection(front1, section.key());
 					if (nextAhead != null) {
 						keep.add(nextAhead.key());
-						BlockPos front2 = nextAhead.firstSignal().equals(front1) ? nextAhead.secondSignal() : nextAhead.firstSignal();
-						Section secondAhead = findConnectedSection(front2, nextAhead.key());
-						if (secondAhead != null) {
-							keep.add(secondAhead.key());
-						}
 					}
 				}
 			}
@@ -599,18 +594,12 @@ public final class RailSemaphoreBlock extends Block {
 			return true;
 		}
 
-		private boolean hasTwoSectionClearance(final RequestKey request, final Approach approach) {
-			if (!request.trainId().equals(this.reservations.get(request.section()))) {
-				return false;
-			}
-			List<Section> continuations = this.continuations(request.section(), approach);
-			return continuations.isEmpty() || continuations.stream()
-				.anyMatch(section -> request.trainId().equals(this.reservations.get(section.key())));
+		private boolean hasOneSectionClearance(final RequestKey request) {
+			return request.trainId().equals(this.reservations.get(request.section()));
 		}
 
-		private boolean tryReserveTwoSections(
+		private boolean tryReserveOneSection(
 			final RequestKey request,
-			final Approach approach,
 			final Map<SectionKey, SectionSnapshot> snapshots,
 			final Set<UUID> waitingTrains
 		) {
@@ -622,42 +611,7 @@ public final class RailSemaphoreBlock extends Block {
 			}
 
 			this.reservations.put(request.section(), trainId);
-			List<Section> continuations = this.continuations(request.section(), approach);
-			if (continuations.isEmpty()) {
-				return true;
-			}
-
-			for (Section continuation : continuations) {
-				UUID continuationOwner = this.reservations.get(continuation.key());
-				if ((continuationOwner == null || continuationOwner.equals(trainId))
-					&& this.canReserve(continuation.key(), trainId, snapshots, waitingTrains)) {
-					this.reservations.put(continuation.key(), trainId);
-					return true;
-				}
-			}
-
-			if (currentOwner == null) {
-				this.reservations.remove(request.section(), trainId);
-			}
-			return false;
-		}
-
-		private List<Section> continuations(final SectionKey requestedSection, final Approach approach) {
-			Section current = this.sections.stream()
-				.filter(section -> section.key().equals(requestedSection))
-				.findFirst()
-				.orElse(null);
-			if (current == null) {
-				return List.of();
-			}
-			BlockPos exitSignal = approach.signalPos().equals(current.firstSignal())
-				? current.secondSignal()
-				: current.firstSignal();
-			return this.sections.stream()
-				.filter(section -> !section.key().equals(requestedSection))
-				.filter(section -> section.firstSignal().equals(exitSignal) || section.secondSignal().equals(exitSignal))
-				.sorted(Comparator.comparing(Section::key, SectionKey::compare))
-				.toList();
+			return true;
 		}
 
 		private void adoptUnreservedOccupants(
