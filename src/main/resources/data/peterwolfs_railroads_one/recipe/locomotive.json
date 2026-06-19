@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "transportation",
+  "ingredients": [
+    "minecraft:furnace_minecart",
+    "minecraft:lever",
+    "minecraft:coal_block",
+    "minecraft:water_bucket"
+  ],
+  "result": {
+    "id": "peterwolfs_railroads_one:locomotive"
+  }
+}

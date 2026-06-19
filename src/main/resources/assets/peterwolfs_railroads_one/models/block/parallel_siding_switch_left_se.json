@@ -1,0 +1,25 @@
+{
+  "textures": {
+    "particle": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+    "track": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        1,
+        16
+      ],
+      "faces": {
+        "up": {
+          "texture": "#track"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "peterwolfs_railroads_one:item/gentle_rail_curve_left_2x2"
+  }
+}

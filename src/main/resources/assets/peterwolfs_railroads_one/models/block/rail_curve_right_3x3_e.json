@@ -1,0 +1,18 @@
+{
+  "textures": {
+    "particle": "peterwolfs_railroads_one:block/rail_curve_right_3x3",
+    "track": "peterwolfs_railroads_one:block/rail_curve_right_3x3"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 1, 16],
+      "faces": {
+        "up": {
+          "uv": [10.666667, 5.333333, 16, 10.666667],
+          "texture": "#track"
+        }
+      }
+    }
+  ]
+}

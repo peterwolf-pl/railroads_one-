@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "transportation",
+  "pattern": [
+    "RIR",
+    "RSR",
+    "RIR"
+  ],
+  "key": {
+    "R": "minecraft:rail",
+    "I": "minecraft:iron_ingot",
+    "S": "minecraft:stick"
+  },
+  "result": {
+    "id": "peterwolfs_railroads_one:gentle_rail_curve_right",
+    "count": 1
+  }
+}

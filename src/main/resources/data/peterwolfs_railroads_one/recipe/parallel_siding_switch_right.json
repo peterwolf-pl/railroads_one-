@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "transportation",
+  "pattern": [
+    "RDR",
+    "RSR",
+    "RIR"
+  ],
+  "key": {
+    "R": "minecraft:rail",
+    "D": "minecraft:redstone",
+    "S": "minecraft:stick",
+    "I": "minecraft:iron_ingot"
+  },
+  "result": {
+    "id": "peterwolfs_railroads_one:parallel_siding_switch_right",
+    "count": 1
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "variants": {
+    "facing=north,variant=left,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw"
+    },
+    "facing=north,variant=left,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne"
+    },
+    "facing=north,variant=left,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw"
+    },
+    "facing=north,variant=left,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se"
+    },
+    "facing=north,variant=left,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw"
+    },
+    "facing=north,variant=left,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne"
+    },
+    "facing=north,variant=left,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw"
+    },
+    "facing=north,variant=left,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se"
+    },
+    "facing=north,variant=right,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw"
+    },
+    "facing=north,variant=right,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne"
+    },
+    "facing=north,variant=right,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw"
+    },
+    "facing=north,variant=right,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se"
+    },
+    "facing=north,variant=right,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw"
+    },
+    "facing=north,variant=right,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne"
+    },
+    "facing=north,variant=right,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw"
+    },
+    "facing=north,variant=right,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se"
+    },
+    "facing=east,variant=left,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 90
+    },
+    "facing=east,variant=left,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 90
+    },
+    "facing=east,variant=right,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 90
+    },
+    "facing=south,variant=left,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 180
+    },
+    "facing=south,variant=left,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 180
+    },
+    "facing=south,variant=right,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 180
+    },
+    "facing=west,variant=left,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "y": 270
+    },
+    "facing=west,variant=left,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=false,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=false,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=false,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=false,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=true,tile=nw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=true,tile=ne": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=true,tile=sw": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "y": 270
+    },
+    "facing=west,variant=right,powered=true,tile=se": {
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "y": 270
+    }
+  }
+}

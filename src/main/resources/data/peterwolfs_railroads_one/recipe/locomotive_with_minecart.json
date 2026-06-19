@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "transportation",
+  "ingredients": [
+    "peterwolfs_railroads_one:locomotive",
+    "minecraft:minecart",
+    "minecraft:iron_chain"
+  ],
+  "result": {
+    "id": "peterwolfs_railroads_one:locomotive_with_minecart"
+  }
+}

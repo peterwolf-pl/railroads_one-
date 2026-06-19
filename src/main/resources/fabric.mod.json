@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"id": "peterwolfs_railroads_one",
+	"version": "${version}",
+	"name": "Peterwolf's RailRoad's One",
+	"description": "Adds smooth railroad curves and parallel siding switches for Minecraft minecarts.",
+	"authors": [
+		"Piotrek"
+	],
+	"icon": "assets/peterwolfs_railroads_one/icon.png",
+	"license": "CC0-1.0",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.piotrek.peterwolfsrailroadsone.PeterwolfsRailroadsOneMod"
+		],
+		"client": [
+			"com.piotrek.peterwolfsrailroadsone.client.PeterwolfsRailroadsOneClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1.2",
+		"java": ">=25",
+		"fabric-api": "*",
+		"minecart_chain": ">=1.0.9"
+	}
+}

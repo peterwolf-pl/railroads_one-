@@ -1,0 +1,22 @@
+{
+  "item.peterwolfs_railroads_one.gentle_rail_curve_left": "Łagodny zakręt toru w lewo 3x3",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_right": "Łagodny zakręt toru w prawo 3x3",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_left_2x2": "Łagodny zakręt toru w lewo 2x2",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_right_2x2": "Łagodny zakręt toru w prawo 2x2",
+  "item.peterwolfs_railroads_one.parallel_siding_switch_left": "Zwrotnica na bocznicę lewa",
+  "item.peterwolfs_railroads_one.parallel_siding_switch_right": "Zwrotnica na bocznicę prawa",
+  "item.peterwolfs_railroads_one.locomotive": "Parowóz",
+  "item.peterwolfs_railroads_one.locomotive_with_minecart": "Parowóz z pustym wagonikiem",
+  "block.peterwolfs_railroads_one.parallel_siding_switch": "Zwrotnica na bocznicę",
+  "entity.peterwolfs_railroads_one.gentle_rail_curve": "Łagodny zakręt toru",
+  "entity.peterwolfs_railroads_one.parallel_siding_switch": "Zwrotnica na bocznicę",
+  "tooltip.peterwolfs_railroads_one.gentle_rail_curve_3x3": "Buduje szeroki łagodny zakręt kolejowy 3x3.",
+  "tooltip.peterwolfs_railroads_one.gentle_rail_curve_2x2": "Buduje kompaktowy zakręt kolejowy 2x2.",
+  "tooltip.peterwolfs_railroads_one.parallel_siding_switch": "Buduje sterowaną redstonem zwrotnicę 2x2 na równoległą bocznicę.",
+  "tooltip.peterwolfs_railroads_one.locomotive": "Stawia parowóz załadowany do pełna węglem i wodą.",
+  "tooltip.peterwolfs_railroads_one.locomotive_with_minecart": "Stawia pełny parowóz połączony z pustym wagonikiem.",
+  "message.peterwolfs_railroads_one.not_enough_space_3x3": "Za mało miejsca na zakręt toru 3x3.",
+  "message.peterwolfs_railroads_one.not_enough_space_2x2": "Za mało miejsca na zakręt toru 2x2.",
+  "message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch": "Za mało miejsca na zwrotnicę na bocznicę 2x2.",
+  "message.peterwolfs_railroads_one.not_enough_connected_rail": "Parowóz z wagonikiem wymaga połączonego odcinka toru."
+}

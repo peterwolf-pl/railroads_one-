@@ -1,0 +1,22 @@
+{
+  "item.peterwolfs_railroads_one.gentle_rail_curve_left": "Gentle Rail Curve Left 3x3",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_right": "Gentle Rail Curve Right 3x3",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_left_2x2": "Gentle Rail Curve Left 2x2",
+  "item.peterwolfs_railroads_one.gentle_rail_curve_right_2x2": "Gentle Rail Curve Right 2x2",
+  "item.peterwolfs_railroads_one.parallel_siding_switch_left": "Parallel Siding Switch Left",
+  "item.peterwolfs_railroads_one.parallel_siding_switch_right": "Parallel Siding Switch Right",
+  "item.peterwolfs_railroads_one.locomotive": "Locomotive",
+  "item.peterwolfs_railroads_one.locomotive_with_minecart": "Locomotive with Empty Minecart",
+  "block.peterwolfs_railroads_one.parallel_siding_switch": "Parallel Siding Switch",
+  "entity.peterwolfs_railroads_one.gentle_rail_curve": "Gentle Rail Curve",
+  "entity.peterwolfs_railroads_one.parallel_siding_switch": "Parallel Siding Switch",
+  "tooltip.peterwolfs_railroads_one.gentle_rail_curve_3x3": "Builds a smooth wide 3x3 railway curve.",
+  "tooltip.peterwolfs_railroads_one.gentle_rail_curve_2x2": "Builds a compact 2x2 railway curve.",
+  "tooltip.peterwolfs_railroads_one.parallel_siding_switch": "Builds a redstone-controlled 2x2 turnout for a parallel siding.",
+  "tooltip.peterwolfs_railroads_one.locomotive": "Places a locomotive fully loaded with coal and water.",
+  "tooltip.peterwolfs_railroads_one.locomotive_with_minecart": "Places a fully loaded locomotive coupled to an empty minecart.",
+  "message.peterwolfs_railroads_one.not_enough_space_3x3": "Not enough space for a 3x3 rail curve.",
+  "message.peterwolfs_railroads_one.not_enough_space_2x2": "Not enough space for a 2x2 rail curve.",
+  "message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch": "Not enough space for a 2x2 parallel siding switch.",
+  "message.peterwolfs_railroads_one.not_enough_connected_rail": "The locomotive with minecart needs a connected rail segment."
+}

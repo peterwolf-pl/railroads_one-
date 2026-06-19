@@ -1,0 +1,19 @@
+{
+  "textures": {
+    "particle": "peterwolfs_railroads_one:block/rail_curve_end",
+    "track": "peterwolfs_railroads_one:block/rail_curve_end"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 0],
+      "to": [16, 2, 16],
+      "faces": {
+        "up": { "texture": "#track" },
+        "north": { "texture": "#track" },
+        "south": { "texture": "#track" },
+        "west": { "texture": "#track" },
+        "east": { "texture": "#track" }
+      }
+    }
+  ]
+}
