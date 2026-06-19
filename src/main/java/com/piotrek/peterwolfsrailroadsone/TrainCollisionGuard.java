@@ -29,6 +29,13 @@ public final class TrainCollisionGuard {
 			return true;
 		}
 
+		net.minecraft.core.BlockPos track1 = RailSectionPathfinder.trackPositionForCart(level, first);
+		net.minecraft.core.BlockPos track2 = RailSectionPathfinder.trackPositionForCart(level, second);
+		boolean onSameLine = track1.equals(track2) || RailSectionPathfinder.findPath(level, track1, track2, 3).isPresent();
+		if (!onSameLine) {
+			return true;
+		}
+
 		Optional<MinecartFurnace> firstLocomotive = MinecartTrainLogic.controlledLocomotive(level, first);
 		Optional<MinecartFurnace> secondLocomotive = MinecartTrainLogic.controlledLocomotive(level, second);
 		if (firstLocomotive.isEmpty() && secondLocomotive.isEmpty()) {
