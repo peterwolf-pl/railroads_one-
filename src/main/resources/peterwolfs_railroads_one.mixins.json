@@ -1,0 +1,11 @@
+{
+	"required": true,
+	"package": "com.piotrek.peterwolfsrailroadsone.mixin",
+	"compatibilityLevel": "JAVA_25",
+	"mixins": [
+		"TrainMinecartCollisionMixin"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

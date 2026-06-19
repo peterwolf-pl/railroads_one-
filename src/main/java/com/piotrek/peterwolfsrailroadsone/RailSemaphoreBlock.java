@@ -230,7 +230,9 @@ public final class RailSemaphoreBlock extends Block {
 
 			this.sections = List.copyOf(rebuilt);
 			this.conflicts = buildConflicts(this.sections);
-			this.reservations.clear();
+			Set<SectionKey> rebuiltKeys = new HashSet<>();
+			this.sections.forEach(section -> rebuiltKeys.add(section.key()));
+			this.reservations.keySet().retainAll(rebuiltKeys);
 			this.topologyValidUntil = gameTime + TOPOLOGY_CACHE_TICKS;
 		}
 
@@ -256,10 +258,17 @@ public final class RailSemaphoreBlock extends Block {
 				this.waitingSince.putIfAbsent(request, gameTime);
 			}
 
-			this.reservations.entrySet().removeIf(entry -> !reservationRemainsValid(entry, snapshots, requests));
-			Set<UUID> grantedTrains = new HashSet<>(occupyingTrains);
+			Set<UUID> waitingTrains = new HashSet<>();
+			requests.keySet().forEach(request -> waitingTrains.add(request.trainId()));
+			this.reservations.entrySet().removeIf(
+				entry -> !reservationRemainsValid(entry, snapshots, requests, waitingTrains)
+			);
+			this.adoptUnreservedOccupants(snapshots, waitingTrains);
+			this.enforceExclusiveReservations(snapshots);
+
+			Set<UUID> grantedTrains = new HashSet<>();
 			for (Map.Entry<SectionKey, UUID> reservation : this.reservations.entrySet()) {
-				if (!hasConflictingOccupant(reservation.getKey(), reservation.getValue(), snapshots)) {
+				if (!hasConflictingOccupant(reservation.getKey(), reservation.getValue(), snapshots, waitingTrains)) {
 					grantedTrains.add(reservation.getValue());
 				}
 			}
@@ -279,7 +288,7 @@ public final class RailSemaphoreBlock extends Block {
 				if (currentReservation != null && !currentReservation.equals(request.trainId())) {
 					continue;
 				}
-				if (this.canReserve(request.section(), request.trainId(), snapshots)) {
+				if (this.canReserve(request.section(), request.trainId(), snapshots, waitingTrains)) {
 					this.reservations.put(request.section(), request.trainId());
 					grantedTrains.add(request.trainId());
 				}
@@ -289,6 +298,11 @@ public final class RailSemaphoreBlock extends Block {
 			Set<BlockPos> occupiedSignals = new HashSet<>();
 			Set<BlockPos> redApproachSignals = new HashSet<>();
 			Set<BlockPos> greenApproachSignals = new HashSet<>();
+			for (UUID occupyingTrain : occupyingTrains) {
+				if (!grantedTrains.contains(occupyingTrain)) {
+					addEmergencyBrake(level, occupyingTrain, desiredBrakes);
+				}
+			}
 			for (SectionSnapshot snapshot : snapshots.values()) {
 				Section section = snapshot.section();
 				if (!snapshot.occupyingTrains().isEmpty()) {
@@ -393,7 +407,8 @@ public final class RailSemaphoreBlock extends Block {
 		private boolean reservationRemainsValid(
 			final Map.Entry<SectionKey, UUID> reservation,
 			final Map<SectionKey, SectionSnapshot> snapshots,
-			final Map<RequestKey, Approach> requests
+			final Map<RequestKey, Approach> requests,
+			final Set<UUID> waitingTrains
 		) {
 			SectionSnapshot snapshot = snapshots.get(reservation.getKey());
 			if (snapshot == null) {
@@ -402,15 +417,58 @@ public final class RailSemaphoreBlock extends Block {
 			UUID owner = reservation.getValue();
 			boolean ownerPresent = snapshot.occupyingTrains().contains(owner)
 				|| requests.containsKey(new RequestKey(reservation.getKey(), owner));
-			return ownerPresent && !this.hasConflictingOccupant(reservation.getKey(), owner, snapshots);
+			return ownerPresent && !this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains);
+		}
+
+		private void adoptUnreservedOccupants(
+			final Map<SectionKey, SectionSnapshot> snapshots,
+			final Set<UUID> waitingTrains
+		) {
+			for (SectionSnapshot snapshot : snapshots.values()) {
+				if (this.reservations.containsKey(snapshot.section().key())) {
+					continue;
+				}
+				Set<UUID> establishedOccupants = new HashSet<>(snapshot.occupyingTrains());
+				establishedOccupants.removeAll(waitingTrains);
+				if (establishedOccupants.size() != 1) {
+					continue;
+				}
+				UUID occupant = establishedOccupants.iterator().next();
+				if (this.canReserve(snapshot.section().key(), occupant, snapshots, waitingTrains)) {
+					this.reservations.put(snapshot.section().key(), occupant);
+				}
+			}
+		}
+
+		private void enforceExclusiveReservations(final Map<SectionKey, SectionSnapshot> snapshots) {
+			List<Map.Entry<SectionKey, UUID>> ordered = new ArrayList<>(this.reservations.entrySet());
+			ordered.sort(
+				Comparator.comparing((Map.Entry<SectionKey, UUID> entry) -> {
+					SectionSnapshot snapshot = snapshots.get(entry.getKey());
+					return snapshot == null || !snapshot.occupyingTrains().contains(entry.getValue());
+				}).thenComparing(Map.Entry::getKey, SectionKey::compare)
+			);
+
+			Map<SectionKey, UUID> accepted = new HashMap<>();
+			for (Map.Entry<SectionKey, UUID> candidate : ordered) {
+				boolean conflictsWithAccepted = this.conflicts.getOrDefault(candidate.getKey(), Set.of(candidate.getKey())).stream()
+					.map(accepted::get)
+					.anyMatch(owner -> owner != null && !owner.equals(candidate.getValue()));
+				if (!conflictsWithAccepted) {
+					accepted.put(candidate.getKey(), candidate.getValue());
+				}
+			}
+			this.reservations.clear();
+			this.reservations.putAll(accepted);
 		}
 
 		private boolean canReserve(
 			final SectionKey section,
 			final UUID trainId,
-			final Map<SectionKey, SectionSnapshot> snapshots
+			final Map<SectionKey, SectionSnapshot> snapshots,
+			final Set<UUID> waitingTrains
 		) {
-			if (this.hasConflictingOccupant(section, trainId, snapshots)) {
+			if (this.hasConflictingOccupant(section, trainId, snapshots, waitingTrains)) {
 				return false;
 			}
 			for (SectionKey conflictingSection : this.conflicts.getOrDefault(section, Set.of(section))) {
@@ -425,15 +483,26 @@ public final class RailSemaphoreBlock extends Block {
 		private boolean hasConflictingOccupant(
 			final SectionKey section,
 			final UUID trainId,
-			final Map<SectionKey, SectionSnapshot> snapshots
+			final Map<SectionKey, SectionSnapshot> snapshots,
+			final Set<UUID> waitingTrains
 		) {
 			for (SectionKey conflictingSection : this.conflicts.getOrDefault(section, Set.of(section))) {
 				SectionSnapshot snapshot = snapshots.get(conflictingSection);
-				if (snapshot != null && snapshot.occupyingTrains().stream().anyMatch(id -> !id.equals(trainId))) {
+				if (snapshot != null && snapshot.occupyingTrains().stream().anyMatch(id ->
+					!id.equals(trainId) && (!waitingTrains.contains(id) || this.reservations.containsValue(id))
+				)) {
 					return true;
 				}
 			}
 			return false;
+		}
+
+		private static void addEmergencyBrake(final ServerLevel level, final UUID trainId, final Set<UUID> desiredBrakes) {
+			Entity entity = level.getEntityInAnyDimension(trainId);
+			if (entity instanceof MinecartFurnace locomotive
+				&& ((MinecartChainAccess) locomotive).minecartChain$hasEngineLever()) {
+				desiredBrakes.add(locomotive.getUUID());
+			}
 		}
 
 		private void applyAutomaticBrakes(final ServerLevel level, final Set<UUID> desiredBrakes) {

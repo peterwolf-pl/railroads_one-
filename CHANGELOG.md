@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1
+
+- Fixed a safety bug where a train detected anywhere on an overlapping merge section was treated as cleared without owning its reservation.
+- Only the reservation owner may now enter a protected or conflicting section; unreserved occupants trigger an emergency brake.
+- Topology cache refreshes preserve active reservations so a train already inside a section cannot lose its clearance mid-route.
+- Train-to-train minecart collision impulses are suppressed: linked cars do not bounce, and separate trains stop instead of reversing direction.
+
 ## 0.3.0
 
 - Rail semaphores now emit redstone power level 15 while showing an occupied/red aspect, readable by redstone dust and comparators.
