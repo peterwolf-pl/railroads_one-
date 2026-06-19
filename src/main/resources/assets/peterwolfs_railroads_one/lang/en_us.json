@@ -19,5 +19,6 @@
   "message.peterwolfs_railroads_one.not_enough_space_3x3": "Not enough space for a 3x3 rail curve.",
   "message.peterwolfs_railroads_one.not_enough_space_2x2": "Not enough space for a 2x2 rail curve.",
   "message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch": "Not enough space for a 2x2 parallel siding switch.",
-  "message.peterwolfs_railroads_one.not_enough_connected_rail": "The locomotive with minecart needs a connected rail segment."
+  "message.peterwolfs_railroads_one.not_enough_connected_rail": "The locomotive with minecart needs a connected rail segment.",
+  "message.peterwolfs_railroads_one.rail_occupied": "Rails are occupied."
 }

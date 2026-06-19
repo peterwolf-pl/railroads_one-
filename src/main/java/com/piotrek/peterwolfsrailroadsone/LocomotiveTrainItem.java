@@ -51,8 +51,8 @@ public final class LocomotiveTrainItem extends Item {
 			return InteractionResult.FAIL;
 		}
 
-		TrackPlacement placement = trackPlacement(level, locomotiveRailPos, locomotiveRail, context.getHorizontalDirection());
-		if (this.includesMinecart && placement.minecartRailPos() == null) {
+		TrackPlacement placement = trackPlacement(level, locomotiveRailPos, locomotiveRail, context.getHorizontalDirection(), this.includesMinecart);
+		if (this.includesMinecart && placement.minecartPos() == null) {
 			displayMessage(context.getPlayer(), "message.peterwolfs_railroads_one.not_enough_connected_rail");
 			return InteractionResult.FAIL;
 		}
@@ -67,8 +67,8 @@ public final class LocomotiveTrainItem extends Item {
 		ItemStack itemStack = context.getItemInHand();
 		MinecartFurnace locomotive = createMinecart(
 			serverLevel,
-			locomotiveRailPos,
-			locomotiveRail,
+			placement.locomotivePos(),
+			serverLevel.getBlockState(placement.locomotivePos()),
 			EntityType.FURNACE_MINECART,
 			itemStack,
 			context.getPlayer()
@@ -79,7 +79,7 @@ public final class LocomotiveTrainItem extends Item {
 
 		Minecart minecart = null;
 		if (this.includesMinecart) {
-			BlockPos minecartRailPos = placement.minecartRailPos();
+			BlockPos minecartRailPos = placement.minecartPos();
 			minecart = createMinecart(
 				serverLevel,
 				minecartRailPos,
@@ -94,6 +94,7 @@ public final class LocomotiveTrainItem extends Item {
 		}
 
 		if (hasMinecartCollision(serverLevel, locomotive) || minecart != null && hasMinecartCollision(serverLevel, minecart)) {
+			displayMessage(context.getPlayer(), "message.peterwolfs_railroads_one.rail_occupied");
 			return InteractionResult.FAIL;
 		}
 
@@ -145,7 +146,7 @@ public final class LocomotiveTrainItem extends Item {
 	) {
 		MinecartChainAccess chain = (MinecartChainAccess) locomotive;
 		chain.minecartChain$setEngineLever(true);
-		chain.minecartChain$setEngineActive(true);
+		chain.minecartChain$setEngineActive(false);
 		chain.minecartChain$setFullThrottle(false);
 		chain.minecartChain$setReversed(false);
 		chain.minecartChain$setWaterTicks(MinecartLocomotiveResources.MAX_WATER_TICKS);
@@ -194,20 +195,30 @@ public final class LocomotiveTrainItem extends Item {
 
 	private static TrackPlacement trackPlacement(
 		final Level level,
-		final BlockPos locomotiveRailPos,
+		final BlockPos clickedPos,
 		final BlockState railState,
-		final Direction playerDirection
+		final Direction playerDirection,
+		final boolean includesMinecart
 	) {
 		List<Direction> exits = exits(railShape(railState));
 		Direction front = bestAligned(exits, playerDirection);
 		Direction rear = exits.get(0) == front ? exits.get(1) : exits.get(0);
-		BlockPos minecartRailPos = connectedRail(level, locomotiveRailPos, rear);
-		if (minecartRailPos != null) {
-			return new TrackPlacement(front, minecartRailPos);
+
+		if (!includesMinecart) {
+			return new TrackPlacement(clickedPos, null, front);
 		}
 
-		minecartRailPos = connectedRail(level, locomotiveRailPos, front);
-		return new TrackPlacement(rear, minecartRailPos);
+		BlockPos rearRail = connectedRail(level, clickedPos, rear);
+		if (rearRail != null) {
+			return new TrackPlacement(clickedPos, rearRail, front);
+		}
+
+		BlockPos frontRail = connectedRail(level, clickedPos, front);
+		if (frontRail != null) {
+			return new TrackPlacement(frontRail, clickedPos, front);
+		}
+
+		return new TrackPlacement(clickedPos, null, front);
 	}
 
 	private static BlockPos connectedRail(final Level level, final BlockPos origin, final Direction direction) {
@@ -261,6 +272,6 @@ public final class LocomotiveTrainItem extends Item {
 		}
 	}
 
-	private record TrackPlacement(Direction frontDirection, BlockPos minecartRailPos) {
+	private record TrackPlacement(BlockPos locomotivePos, BlockPos minecartPos, Direction frontDirection) {
 	}
 }

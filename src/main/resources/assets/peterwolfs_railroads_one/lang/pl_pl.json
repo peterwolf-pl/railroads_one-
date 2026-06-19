@@ -19,5 +19,6 @@
   "message.peterwolfs_railroads_one.not_enough_space_3x3": "Za mało miejsca na zakręt toru 3x3.",
   "message.peterwolfs_railroads_one.not_enough_space_2x2": "Za mało miejsca na zakręt toru 2x2.",
   "message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch": "Za mało miejsca na zwrotnicę na bocznicę 2x2.",
-  "message.peterwolfs_railroads_one.not_enough_connected_rail": "Parowóz z wagonikiem wymaga połączonego odcinka toru."
+  "message.peterwolfs_railroads_one.not_enough_connected_rail": "Parowóz z wagonikiem wymaga połączonego odcinka toru.",
+  "message.peterwolfs_railroads_one.rail_occupied": "Tory są zajęte."
 }

@@ -423,7 +423,8 @@ public final class RailSemaphoreBlock extends Block {
 			if (!request.trainId().equals(this.reservations.get(request.section()))) {
 				return false;
 			}
-			return this.continuations(request.section(), approach).stream()
+			List<Section> continuations = this.continuations(request.section(), approach);
+			return continuations.isEmpty() || continuations.stream()
 				.anyMatch(section -> request.trainId().equals(this.reservations.get(section.key())));
 		}
 
@@ -441,7 +442,12 @@ public final class RailSemaphoreBlock extends Block {
 			}
 
 			this.reservations.put(request.section(), trainId);
-			for (Section continuation : this.continuations(request.section(), approach)) {
+			List<Section> continuations = this.continuations(request.section(), approach);
+			if (continuations.isEmpty()) {
+				return true;
+			}
+
+			for (Section continuation : continuations) {
 				UUID continuationOwner = this.reservations.get(continuation.key());
 				if ((continuationOwner == null || continuationOwner.equals(trainId))
 					&& this.canReserve(continuation.key(), trainId, snapshots, waitingTrains)) {
