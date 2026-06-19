@@ -25,6 +25,10 @@ public final class TrainCollisionGuard {
 			return false;
 		}
 
+		if (inSameTrain(level, first, second)) {
+			return true;
+		}
+
 		Optional<MinecartFurnace> firstLocomotive = MinecartTrainLogic.controlledLocomotive(level, first);
 		Optional<MinecartFurnace> secondLocomotive = MinecartTrainLogic.controlledLocomotive(level, second);
 		if (firstLocomotive.isEmpty() && secondLocomotive.isEmpty()) {
@@ -42,6 +46,24 @@ public final class TrainCollisionGuard {
 		firstLocomotive.ifPresent(MinecartTrainLogic::applyTrainBrake);
 		secondLocomotive.ifPresent(MinecartTrainLogic::applyTrainBrake);
 		return true;
+	}
+
+	private static boolean inSameTrain(final ServerLevel level, final AbstractMinecart first, final AbstractMinecart second) {
+		Queue<AbstractMinecart> pending = new ArrayDeque<>();
+		Set<UUID> seen = new HashSet<>();
+		pending.add(first);
+		seen.add(first.getUUID());
+
+		while (!pending.isEmpty() && seen.size() <= MAX_TRAIN_CARTS) {
+			AbstractMinecart minecart = pending.remove();
+			if (minecart.getUUID().equals(second.getUUID())) {
+				return true;
+			}
+			MinecartChainAccess links = (MinecartChainAccess) minecart;
+			addLinkedCart(level, links.minecartChain$getFirstLink(), seen, pending);
+			addLinkedCart(level, links.minecartChain$getSecondLink(), seen, pending);
+		}
+		return false;
 	}
 
 	private static void stopConnectedCarts(final ServerLevel level, final AbstractMinecart start) {

@@ -8,7 +8,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import java.util.UUID;
 import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
@@ -396,12 +399,55 @@ public final class RailSemaphoreBlock extends Block {
 			final AbstractMinecart cart,
 			final Map<UUID, UUID> trainIds
 		) {
-			return trainIds.computeIfAbsent(
-				cart.getUUID(),
-				ignored -> MinecartTrainLogic.controlledLocomotive(level, cart)
-					.map(AbstractMinecart::getUUID)
-					.orElse(cart.getUUID())
-			);
+			UUID cached = trainIds.get(cart.getUUID());
+			if (cached != null) {
+				return cached;
+			}
+
+			List<AbstractMinecart> train = connectedTrain(level, cart);
+			UUID representative = train.stream()
+				.filter(MinecartFurnace.class::isInstance)
+				.map(MinecartFurnace.class::cast)
+				.filter(furnace -> ((MinecartChainAccess) furnace).minecartChain$hasEngineLever())
+				.min(Comparator.comparing(Entity::getUUID))
+				.map(AbstractMinecart::getUUID)
+				.orElse(cart.getUUID());
+
+			for (AbstractMinecart trainCart : train) {
+				trainIds.put(trainCart.getUUID(), representative);
+			}
+			return representative;
+		}
+
+		private static List<AbstractMinecart> connectedTrain(final ServerLevel level, final AbstractMinecart start) {
+			List<AbstractMinecart> train = new ArrayList<>();
+			Queue<AbstractMinecart> pending = new ArrayDeque<>();
+			Set<UUID> seen = new HashSet<>();
+			pending.add(start);
+			seen.add(start.getUUID());
+
+			while (!pending.isEmpty() && train.size() < 64) {
+				AbstractMinecart minecart = pending.remove();
+				train.add(minecart);
+				MinecartChainAccess links = (MinecartChainAccess) minecart;
+				addLinkedCart(level, links.minecartChain$getFirstLink(), seen, pending);
+				addLinkedCart(level, links.minecartChain$getSecondLink(), seen, pending);
+			}
+			return train;
+		}
+
+		private static void addLinkedCart(
+			final ServerLevel level,
+			final Optional<UUID> linkedId,
+			final Set<UUID> seen,
+			final Queue<AbstractMinecart> pending
+		) {
+			linkedId.filter(seen::add).ifPresent(id -> {
+				Entity linked = level.getEntityInAnyDimension(id);
+				if (linked instanceof AbstractMinecart minecart) {
+					pending.add(minecart);
+				}
+			});
 		}
 
 		private boolean reservationRemainsValid(
@@ -566,8 +612,23 @@ public final class RailSemaphoreBlock extends Block {
 		}
 
 		private void applyAutomaticBrakes(final ServerLevel level, final Set<UUID> desiredBrakes) {
+			Set<UUID> expandedBrakes = new HashSet<>();
+			for (UUID locomotiveId : desiredBrakes) {
+				Entity entity = level.getEntityInAnyDimension(locomotiveId);
+				if (entity instanceof AbstractMinecart cart) {
+					for (AbstractMinecart trainCart : connectedTrain(level, cart)) {
+						if (trainCart instanceof MinecartFurnace locomotive
+							&& ((MinecartChainAccess) locomotive).minecartChain$hasEngineLever()) {
+							expandedBrakes.add(locomotive.getUUID());
+						}
+					}
+				} else {
+					expandedBrakes.add(locomotiveId);
+				}
+			}
+
 			Set<UUID> released = new HashSet<>(this.automaticBrakes);
-			released.removeAll(desiredBrakes);
+			released.removeAll(expandedBrakes);
 			for (UUID locomotiveId : released) {
 				Entity entity = level.getEntityInAnyDimension(locomotiveId);
 				if (entity instanceof MinecartFurnace locomotive && locomotive.level() == level) {
@@ -579,7 +640,7 @@ public final class RailSemaphoreBlock extends Block {
 				}
 			}
 
-			for (UUID locomotiveId : desiredBrakes) {
+			for (UUID locomotiveId : expandedBrakes) {
 				Entity entity = level.getEntityInAnyDimension(locomotiveId);
 				if (!(entity instanceof MinecartFurnace locomotive) || locomotive.level() != level) {
 					continue;
@@ -592,7 +653,7 @@ public final class RailSemaphoreBlock extends Block {
 				MinecartTrainLogic.applyTrainBrake(locomotive);
 			}
 			this.automaticBrakes.clear();
-			this.automaticBrakes.addAll(desiredBrakes);
+			this.automaticBrakes.addAll(expandedBrakes);
 		}
 
 		private void releaseAllAutomaticBrakes(final ServerLevel level) {
