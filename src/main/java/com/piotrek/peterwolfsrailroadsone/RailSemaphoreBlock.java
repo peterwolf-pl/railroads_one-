@@ -265,8 +265,10 @@ public final class RailSemaphoreBlock extends Block {
 			requests.keySet().forEach(request -> waitingTrains.add(request.trainId()));
 			Set<UUID> presentTrains = new HashSet<>(occupyingTrains);
 			presentTrains.addAll(waitingTrains);
+
+			Map<UUID, Set<SectionKey>> sectionsToKeepCache = new HashMap<>();
 			this.reservations.entrySet().removeIf(
-				entry -> !reservationRemainsValid(entry, snapshots, presentTrains, waitingTrains)
+				entry -> !reservationRemainsValid(level, entry, snapshots, presentTrains, waitingTrains, sectionsToKeepCache)
 			);
 			this.adoptUnreservedOccupants(snapshots, waitingTrains);
 			this.enforceExclusiveReservations(snapshots);
@@ -336,8 +338,14 @@ public final class RailSemaphoreBlock extends Block {
 				}
 			}
 
+			Set<BlockPos> rearSignals = new HashSet<>();
+			for (UUID trainId : occupyingTrains) {
+				this.collectRearSignals(level, trainId, snapshots, rearSignals);
+			}
+
 			redApproachSignals.removeAll(greenApproachSignals);
 			redApproachSignals.addAll(occupiedSignals);
+			redApproachSignals.addAll(rearSignals);
 			this.applyAutomaticBrakes(level, desiredBrakes);
 			for (BlockPos semaphore : this.knownSemaphores.keySet()) {
 				setOccupied(level, semaphore, redApproachSignals.contains(semaphore));
@@ -394,6 +402,119 @@ public final class RailSemaphoreBlock extends Block {
 			return new SectionSnapshot(section, Set.copyOf(occupyingTrains), Map.copyOf(approaches));
 		}
 
+		private static Optional<MinecartFurnace> trainLocomotive(final ServerLevel level, final AbstractMinecart cart) {
+			return connectedTrain(level, cart).stream()
+				.filter(MinecartFurnace.class::isInstance)
+				.map(MinecartFurnace.class::cast)
+				.filter(furnace -> ((MinecartChainAccess) furnace).minecartChain$hasEngineLever())
+				.min(Comparator.comparing(Entity::getUUID));
+		}
+
+		private static BlockPos rearSignal(final Section section, final MinecartFurnace locomotive) {
+			Vec3 forward = MinecartTrainLogic.drivingDirection(locomotive);
+			BlockPos first = section.firstSignal();
+			BlockPos second = section.secondSignal();
+			Vec3 toFirst = Vec3.atCenterOf(first).subtract(locomotive.position()).horizontal();
+			Vec3 toSecond = Vec3.atCenterOf(second).subtract(locomotive.position()).horizontal();
+			return toFirst.dot(forward) < toSecond.dot(forward) ? first : second;
+		}
+
+		private static BlockPos forwardSignal(final Section section, final MinecartFurnace locomotive) {
+			Vec3 forward = MinecartTrainLogic.drivingDirection(locomotive);
+			BlockPos first = section.firstSignal();
+			BlockPos second = section.secondSignal();
+			Vec3 toFirst = Vec3.atCenterOf(first).subtract(locomotive.position()).horizontal();
+			Vec3 toSecond = Vec3.atCenterOf(second).subtract(locomotive.position()).horizontal();
+			return toFirst.dot(forward) >= toSecond.dot(forward) ? first : second;
+		}
+
+		private Section findConnectedSection(final BlockPos signalPos, final SectionKey exclude) {
+			return this.sections.stream()
+				.filter(section -> !section.key().equals(exclude))
+				.filter(section -> section.firstSignal().equals(signalPos) || section.secondSignal().equals(signalPos))
+				.findFirst()
+				.orElse(null);
+		}
+
+		private Set<SectionKey> sectionsToKeep(final ServerLevel level, final UUID trainId, final Map<SectionKey, SectionSnapshot> snapshots) {
+			Set<SectionKey> keep = new HashSet<>();
+			List<SectionSnapshot> occupiedSnapshots = snapshots.values().stream()
+				.filter(snapshot -> snapshot.occupyingTrains().contains(trainId))
+				.toList();
+
+			if (occupiedSnapshots.isEmpty()) {
+				return Set.of();
+			}
+
+			for (SectionSnapshot snapshot : occupiedSnapshots) {
+				Section section = snapshot.section();
+				keep.add(section.key());
+
+				Optional<MinecartFurnace> locomotiveOpt = level.getEntitiesOfClass(MinecartFurnace.class, section.searchBox()).stream()
+					.filter(loco -> ((MinecartChainAccess) loco).minecartChain$hasEngineLever())
+					.filter(loco -> trainId.equals(trainLocomotive(level, loco).map(AbstractMinecart::getUUID).orElse(null)))
+					.findFirst();
+
+				if (locomotiveOpt.isPresent()) {
+					MinecartFurnace locomotive = locomotiveOpt.get();
+					
+					// Trace behind (up to 2 sections)
+					BlockPos rear1 = rearSignal(section, locomotive);
+					Section nextBehind = findConnectedSection(rear1, section.key());
+					if (nextBehind != null) {
+						keep.add(nextBehind.key());
+						BlockPos rear2 = nextBehind.firstSignal().equals(rear1) ? nextBehind.secondSignal() : nextBehind.firstSignal();
+						Section secondBehind = findConnectedSection(rear2, nextBehind.key());
+						if (secondBehind != null) {
+							keep.add(secondBehind.key());
+						}
+					}
+					
+					// Trace ahead (up to 2 sections)
+					BlockPos front1 = forwardSignal(section, locomotive);
+					Section nextAhead = findConnectedSection(front1, section.key());
+					if (nextAhead != null) {
+						keep.add(nextAhead.key());
+						BlockPos front2 = nextAhead.firstSignal().equals(front1) ? nextAhead.secondSignal() : nextAhead.firstSignal();
+						Section secondAhead = findConnectedSection(front2, nextAhead.key());
+						if (secondAhead != null) {
+							keep.add(secondAhead.key());
+						}
+					}
+				}
+			}
+			return keep;
+		}
+
+		private void collectRearSignals(final ServerLevel level, final UUID trainId, final Map<SectionKey, SectionSnapshot> snapshots, final Set<BlockPos> redSignals) {
+			List<SectionSnapshot> occupiedSnapshots = snapshots.values().stream()
+				.filter(snapshot -> snapshot.occupyingTrains().contains(trainId))
+				.toList();
+
+			for (SectionSnapshot snapshot : occupiedSnapshots) {
+				Section section = snapshot.section();
+				Optional<MinecartFurnace> locomotiveOpt = level.getEntitiesOfClass(MinecartFurnace.class, section.searchBox()).stream()
+					.filter(loco -> ((MinecartChainAccess) loco).minecartChain$hasEngineLever())
+					.filter(loco -> trainId.equals(trainLocomotive(level, loco).map(AbstractMinecart::getUUID).orElse(null)))
+					.findFirst();
+
+				if (locomotiveOpt.isPresent()) {
+					MinecartFurnace locomotive = locomotiveOpt.get();
+					
+					// First signal behind
+					BlockPos rear1 = rearSignal(section, locomotive);
+					redSignals.add(rear1);
+					
+					// Second signal behind
+					Section nextBehind = findConnectedSection(rear1, section.key());
+					if (nextBehind != null) {
+						BlockPos rear2 = nextBehind.firstSignal().equals(rear1) ? nextBehind.secondSignal() : nextBehind.firstSignal();
+						redSignals.add(rear2);
+					}
+				}
+			}
+		}
+
 		private static UUID trainId(
 			final ServerLevel level,
 			final AbstractMinecart cart,
@@ -405,11 +526,7 @@ public final class RailSemaphoreBlock extends Block {
 			}
 
 			List<AbstractMinecart> train = connectedTrain(level, cart);
-			UUID representative = train.stream()
-				.filter(MinecartFurnace.class::isInstance)
-				.map(MinecartFurnace.class::cast)
-				.filter(furnace -> ((MinecartChainAccess) furnace).minecartChain$hasEngineLever())
-				.min(Comparator.comparing(Entity::getUUID))
+			UUID representative = trainLocomotive(level, cart)
 				.map(AbstractMinecart::getUUID)
 				.orElse(cart.getUUID());
 
@@ -451,18 +568,35 @@ public final class RailSemaphoreBlock extends Block {
 		}
 
 		private boolean reservationRemainsValid(
+			final ServerLevel level,
 			final Map.Entry<SectionKey, UUID> reservation,
 			final Map<SectionKey, SectionSnapshot> snapshots,
 			final Set<UUID> presentTrains,
-			final Set<UUID> waitingTrains
+			final Set<UUID> waitingTrains,
+			final Map<UUID, Set<SectionKey>> sectionsToKeepCache
 		) {
 			SectionSnapshot snapshot = snapshots.get(reservation.getKey());
 			if (snapshot == null) {
 				return false;
 			}
 			UUID owner = reservation.getValue();
-			return presentTrains.contains(owner)
-				&& !this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains);
+			if (!presentTrains.contains(owner)) {
+				return false;
+			}
+			if (this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains)) {
+				return false;
+			}
+
+			boolean isOccupyingAny = snapshots.values().stream()
+				.anyMatch(snap -> snap.occupyingTrains().contains(owner));
+			if (isOccupyingAny) {
+				Set<SectionKey> keep = sectionsToKeepCache.computeIfAbsent(owner, id -> this.sectionsToKeep(level, id, snapshots));
+				if (!keep.contains(reservation.getKey())) {
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		private boolean hasTwoSectionClearance(final RequestKey request, final Approach approach) {
