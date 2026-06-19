@@ -1,7 +1,9 @@
 package com.piotrek.peterwolfsrailroadsone;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -23,7 +25,13 @@ public final class CurvePlacementHelper {
 	}
 
 	public static boolean canPlace(final ServerLevel level, final Placement placement) {
-		for (BlockPos pos : occupiedPositions(placement.anchor(), placement.facing(), placement.turn(), placement.size())) {
+		Set<BlockPos> footprint = new HashSet<>(occupiedPositions(
+			placement.anchor(),
+			placement.facing(),
+			placement.turn(),
+			placement.size()
+		));
+		for (BlockPos pos : footprint) {
 			BlockState state = level.getBlockState(pos);
 			if (!state.canBeReplaced() && !state.is(ModBlocks.RAIL_CURVE_MARKER)) {
 				return false;
@@ -37,9 +45,15 @@ public final class CurvePlacementHelper {
 		for (GentleRailCurveEntity curve : curves) {
 			if (!curve.hasCompleteMarkerFootprint(level)) {
 				curve.remove(Entity.RemovalReason.KILLED);
+				continue;
+			}
+			for (BlockPos pos : footprint) {
+				if (curve.ownsMarker(pos)) {
+					return false;
+				}
 			}
 		}
-		return curves.stream().allMatch(Entity::isRemoved);
+		return true;
 	}
 
 	public static void reserve(final ServerLevel level, final Placement placement) {

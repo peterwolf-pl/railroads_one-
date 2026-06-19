@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "transportation",
+  "pattern": [
+    " R ",
+    " T ",
+    " I "
+  ],
+  "key": {
+    "R": "minecraft:redstone",
+    "T": "minecraft:redstone_torch",
+    "I": "minecraft:iron_ingot"
+  },
+  "result": {
+    "id": "peterwolfs_railroads_one:rail_semaphore",
+    "count": 1
+  }
+}

@@ -25,6 +25,7 @@ import net.minecraft.world.phys.Vec3;
 
 public class GentleRailCurveEntity extends Entity {
 	private static final float MAX_CART_YAW_STEP = 28.0F;
+	private static final int FOOTPRINT_CHECK_INTERVAL_TICKS = 20;
 	private static final EntityDataAccessor<Integer> FACING = SynchedEntityData.defineId(GentleRailCurveEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Boolean> RIGHT_TURN = SynchedEntityData.defineId(GentleRailCurveEntity.class, EntityDataSerializers.BOOLEAN);
 	private static final EntityDataAccessor<Integer> CURVE_SIZE = SynchedEntityData.defineId(GentleRailCurveEntity.class, EntityDataSerializers.INT);
@@ -86,7 +87,8 @@ public class GentleRailCurveEntity extends Entity {
 		if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel) {
 			// Water can remove marker blocks without invoking playerWillDestroy. Do not leave
 			// an invisible curve entity behind, because it would block rebuilding the curve.
-			if (!this.hasCompleteMarkerFootprint(serverLevel)) {
+			if (Math.floorMod(this.tickCount + this.anchor.hashCode(), FOOTPRINT_CHECK_INTERVAL_TICKS) == 0
+				&& !this.hasCompleteMarkerFootprint(serverLevel)) {
 				this.remove(Entity.RemovalReason.KILLED);
 				return;
 			}

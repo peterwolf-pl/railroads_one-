@@ -18,6 +18,18 @@ public final class ModBlocks {
 		"parallel_siding_switch",
 		key -> new ParallelSidingSwitchBlock(BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.2F).sound(SoundType.METAL).setId(key))
 	);
+	public static final RailSemaphoreBlock RAIL_SEMAPHORE = registerBlock(
+		"rail_semaphore",
+		key -> new RailSemaphoreBlock(
+			BlockBehaviour.Properties.of()
+				.noCollision()
+				.noOcclusion()
+				.strength(0.4F)
+				.sound(SoundType.WOOD)
+				.lightLevel(state -> state.getValue(RailSemaphoreBlock.OCCUPIED) ? 12 : 0)
+				.setId(key)
+		)
+	);
 
 	private ModBlocks() {
 	}

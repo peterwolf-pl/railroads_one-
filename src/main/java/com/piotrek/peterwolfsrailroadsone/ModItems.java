@@ -6,6 +6,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.item.CreativeModeTabs;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 
@@ -42,6 +43,10 @@ public final class ModItems {
 		"locomotive_with_minecart",
 		key -> new LocomotiveTrainItem(true, new Item.Properties().stacksTo(1).setId(key))
 	);
+	public static final Item RAIL_SEMAPHORE = register(
+		"rail_semaphore",
+		key -> new BlockItem(ModBlocks.RAIL_SEMAPHORE, new Item.Properties().stacksTo(16).setId(key))
+	);
 
 	private ModItems() {
 	}
@@ -56,6 +61,7 @@ public final class ModItems {
 			output.insertAfter(PARALLEL_SIDING_SWITCH_LEFT, PARALLEL_SIDING_SWITCH_RIGHT);
 			output.insertAfter(PARALLEL_SIDING_SWITCH_RIGHT, LOCOMOTIVE);
 			output.insertAfter(LOCOMOTIVE, LOCOMOTIVE_WITH_MINECART);
+			output.insertAfter(LOCOMOTIVE_WITH_MINECART, RAIL_SEMAPHORE);
 		});
 	}
 

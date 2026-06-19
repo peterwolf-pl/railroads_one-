@@ -1,0 +1,7 @@
+{
+  "parent": "peterwolfs_railroads_one:block/rail_semaphore_off",
+  "textures": {
+    "particle": "minecraft:block/redstone_torch",
+    "torch": "minecraft:block/redstone_torch"
+  }
+}

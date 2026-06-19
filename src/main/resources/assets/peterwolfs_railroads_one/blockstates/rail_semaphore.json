@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "lit=false": { "model": "peterwolfs_railroads_one:block/rail_semaphore_off" },
+    "lit=true": { "model": "peterwolfs_railroads_one:block/rail_semaphore_on" }
+  }
+}

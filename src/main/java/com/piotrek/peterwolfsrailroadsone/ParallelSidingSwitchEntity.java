@@ -30,6 +30,7 @@ import net.minecraft.world.phys.Vec3;
 
 public class ParallelSidingSwitchEntity extends Entity {
 	private static final float MAX_CART_YAW_STEP = 28.0F;
+	private static final int MAINTENANCE_INTERVAL_TICKS = 20;
 	private static final EntityDataAccessor<Integer> FACING = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Boolean> RIGHT_VARIANT = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.BOOLEAN);
 	private static final EntityDataAccessor<Boolean> POWERED = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.BOOLEAN);
@@ -91,8 +92,10 @@ public class ParallelSidingSwitchEntity extends Entity {
 	public void tick() {
 		super.tick();
 		if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel) {
-			this.refreshPowered(serverLevel);
-			this.straightenParallelTrackRails(serverLevel);
+			if (Math.floorMod(this.tickCount + this.anchor.hashCode(), MAINTENANCE_INTERVAL_TICKS) == 0) {
+				this.refreshPowered(serverLevel);
+				this.straightenParallelTrackRails(serverLevel);
+			}
 			this.guideNearbyMinecarts(serverLevel);
 		}
 	}
