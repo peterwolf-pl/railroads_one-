@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/rail_flat",
+  "textures": {
+    "rail": "peterwolfs_railroads_one:block/crossing_rail"
+  }
+}

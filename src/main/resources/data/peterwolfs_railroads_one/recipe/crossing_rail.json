@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    " R ",
+    "R R",
+    " R "
+  ],
+  "key": {
+    "R": "minecraft:rail"
+  },
+  "result": {
+    "id": "peterwolfs_railroads_one:crossing_rail",
+    "count": 1
+  }
+}

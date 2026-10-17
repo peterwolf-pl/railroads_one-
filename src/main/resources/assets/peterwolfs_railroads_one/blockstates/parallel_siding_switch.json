@@ -13,16 +13,16 @@
       "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se"
     },
     "facing=north,variant=left,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw_powered"
     },
     "facing=north,variant=left,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne_powered"
     },
     "facing=north,variant=left,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw_powered"
     },
     "facing=north,variant=left,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se_powered"
     },
     "facing=north,variant=right,powered=false,tile=nw": {
       "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw"
@@ -37,16 +37,16 @@
       "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se"
     },
     "facing=north,variant=right,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw_powered"
     },
     "facing=north,variant=right,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne_powered"
     },
     "facing=north,variant=right,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw_powered"
     },
     "facing=north,variant=right,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se"
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se_powered"
     },
     "facing=east,variant=left,powered=false,tile=nw": {
       "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
@@ -65,19 +65,19 @@
       "y": 90
     },
     "facing=east,variant=left,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw_powered",
       "y": 90
     },
     "facing=east,variant=left,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne_powered",
       "y": 90
     },
     "facing=east,variant=left,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw_powered",
       "y": 90
     },
     "facing=east,variant=left,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se_powered",
       "y": 90
     },
     "facing=east,variant=right,powered=false,tile=nw": {
@@ -97,19 +97,19 @@
       "y": 90
     },
     "facing=east,variant=right,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw_powered",
       "y": 90
     },
     "facing=east,variant=right,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne_powered",
       "y": 90
     },
     "facing=east,variant=right,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw_powered",
       "y": 90
     },
     "facing=east,variant=right,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se_powered",
       "y": 90
     },
     "facing=south,variant=left,powered=false,tile=nw": {
@@ -129,19 +129,19 @@
       "y": 180
     },
     "facing=south,variant=left,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw_powered",
       "y": 180
     },
     "facing=south,variant=left,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne_powered",
       "y": 180
     },
     "facing=south,variant=left,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw_powered",
       "y": 180
     },
     "facing=south,variant=left,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se_powered",
       "y": 180
     },
     "facing=south,variant=right,powered=false,tile=nw": {
@@ -161,19 +161,19 @@
       "y": 180
     },
     "facing=south,variant=right,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw_powered",
       "y": 180
     },
     "facing=south,variant=right,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne_powered",
       "y": 180
     },
     "facing=south,variant=right,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw_powered",
       "y": 180
     },
     "facing=south,variant=right,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se_powered",
       "y": 180
     },
     "facing=west,variant=left,powered=false,tile=nw": {
@@ -193,19 +193,19 @@
       "y": 270
     },
     "facing=west,variant=left,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_nw_powered",
       "y": 270
     },
     "facing=west,variant=left,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_ne_powered",
       "y": 270
     },
     "facing=west,variant=left,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_sw_powered",
       "y": 270
     },
     "facing=west,variant=left,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_left_se_powered",
       "y": 270
     },
     "facing=west,variant=right,powered=false,tile=nw": {
@@ -225,19 +225,19 @@
       "y": 270
     },
     "facing=west,variant=right,powered=true,tile=nw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_nw_powered",
       "y": 270
     },
     "facing=west,variant=right,powered=true,tile=ne": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_ne_powered",
       "y": 270
     },
     "facing=west,variant=right,powered=true,tile=sw": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_sw_powered",
       "y": 270
     },
     "facing=west,variant=right,powered=true,tile=se": {
-      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se",
+      "model": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se_powered",
       "y": 270
     }
   }

@@ -20,17 +20,20 @@ public final class ParallelSidingSwitchMath {
 		final double progress
 	) {
 		double t = Mth.clamp(progress, 0.0, 1.0);
-		Vec3 start = mainStart(anchor, facing);
+		double startX = anchor.getX() + 0.5D - facing.getStepX();
+		double startY = anchor.getY() + ROUTE_Y_OFFSET;
+		double startZ = anchor.getZ() + 0.5D - facing.getStepZ();
 		if (route == ParallelSidingSwitchRoute.MAIN) {
-			return start.add(horizontal(facing).scale(t));
+			return new Vec3(startX + facing.getStepX() * t, startY, startZ + facing.getStepZ() * t);
 		}
 
-		return cubic(
-			start,
-			start.add(horizontal(facing).scale(SIDING_CONTROL_LENGTH)),
-			sidingEnd(anchor, facing, variant).add(horizontal(facing).scale(-SIDING_CONTROL_LENGTH)),
-			sidingEnd(anchor, facing, variant),
-			t
+		double forward = sidingForward(t);
+		double side = sidingSide(t);
+		Direction sideDirection = variant.sideDirection(facing);
+		return new Vec3(
+			startX + facing.getStepX() * forward + sideDirection.getStepX() * side,
+			startY,
+			startZ + facing.getStepZ() * forward + sideDirection.getStepZ() * side
 		);
 	}
 
@@ -46,11 +49,13 @@ public final class ParallelSidingSwitchMath {
 			return horizontal(facing);
 		}
 
-		Vec3 start = mainStart(anchor, facing);
-		Vec3 controlA = start.add(horizontal(facing).scale(SIDING_CONTROL_LENGTH));
-		Vec3 end = sidingEnd(anchor, facing, variant);
-		Vec3 controlB = end.add(horizontal(facing).scale(-SIDING_CONTROL_LENGTH));
-		return cubicDerivative(start, controlA, controlB, end, t).normalize();
+		double forward = sidingForwardDerivative(t);
+		double side = sidingSideDerivative(t);
+		Direction sideDirection = variant.sideDirection(facing);
+		double x = facing.getStepX() * forward + sideDirection.getStepX() * side;
+		double z = facing.getStepZ() * forward + sideDirection.getStepZ() * side;
+		double length = Math.sqrt(x * x + z * z);
+		return new Vec3(x / length, 0.0D, z / length);
 	}
 
 	public static double nearestProgress(
@@ -60,28 +65,102 @@ public final class ParallelSidingSwitchMath {
 		final ParallelSidingSwitchRoute route,
 		final Vec3 position
 	) {
+		return Mth.clamp(nearestProgressExtended(anchor, facing, variant, route, position), 0.0, 1.0);
+	}
+
+	public static double nearestProgressExtended(
+		final BlockPos anchor,
+		final Direction facing,
+		final ParallelSidingSwitchVariant variant,
+		final ParallelSidingSwitchRoute route,
+		final Vec3 position
+	) {
+		double startX = anchor.getX() + 0.5D - facing.getStepX();
+		double startZ = anchor.getZ() + 0.5D - facing.getStepZ();
+		double relativeX = position.x - startX;
+		double relativeZ = position.z - startZ;
+		double localForward = relativeX * facing.getStepX() + relativeZ * facing.getStepZ();
+		double length = routeLength(route);
 		if (route == ParallelSidingSwitchRoute.MAIN) {
-			Vec3 start = mainStart(anchor, facing);
-			return Mth.clamp(position.subtract(start).dot(horizontal(facing)), 0.0, 1.0);
+			return localForward;
 		}
 
+		Direction sideDirection = variant.sideDirection(facing);
+		double localSide = relativeX * sideDirection.getStepX() + relativeZ * sideDirection.getStepZ();
 		double bestProgress = 0.0;
 		double bestDistance = Double.MAX_VALUE;
 		for (int step = 0; step <= 32; step++) {
 			double progress = step / 32.0;
-			double distance = horizontalDistanceSqr(position, point(anchor, facing, variant, route, progress));
+			double forwardDelta = localForward - sidingForward(progress);
+			double sideDelta = localSide - sidingSide(progress);
+			double distance = forwardDelta * forwardDelta + sideDelta * sideDelta;
 			if (distance < bestDistance) {
 				bestDistance = distance;
 				bestProgress = progress;
 			}
 		}
+
+		Vec3 start = point(anchor, facing, variant, route, 0.0D);
+		Vec3 end = point(anchor, facing, variant, route, 1.0D);
+		if (bestProgress <= 0.001D) {
+			double alongStart = (position.x - start.x) * facing.getStepX() + (position.z - start.z) * facing.getStepZ();
+			if (alongStart < 0.0D) {
+				return alongStart / length;
+			}
+		}
+		if (bestProgress >= 0.999D) {
+			Vec3 exitTangent = tangent(anchor, facing, variant, route, 1.0D);
+			double alongExit = (position.x - end.x) * exitTangent.x + (position.z - end.z) * exitTangent.z;
+			if (alongExit > 0.0D) {
+				return 1.0D + alongExit / length;
+			}
+		}
 		return bestProgress;
 	}
 
+	public static double routeLength(final ParallelSidingSwitchRoute route) {
+		return route == ParallelSidingSwitchRoute.MAIN ? 1.0 : 1.55;
+	}
+
+	public static Vec3 pointExtended(
+		final BlockPos anchor,
+		final Direction facing,
+		final ParallelSidingSwitchVariant variant,
+		final ParallelSidingSwitchRoute route,
+		final double progress
+	) {
+		double length = routeLength(route);
+		if (progress >= 0.0D && progress <= 1.0D) {
+			return point(anchor, facing, variant, route, progress);
+		}
+		if (progress < 0.0D) {
+			return point(anchor, facing, variant, route, 0.0D)
+				.add(tangent(anchor, facing, variant, route, 0.0D).scale(progress * length));
+		}
+		return point(anchor, facing, variant, route, 1.0D)
+			.add(tangent(anchor, facing, variant, route, 1.0D).scale((progress - 1.0D) * length));
+	}
+
+	public static Vec3 tangentExtended(
+		final BlockPos anchor,
+		final Direction facing,
+		final ParallelSidingSwitchVariant variant,
+		final ParallelSidingSwitchRoute route,
+		final double progress
+	) {
+		if (progress <= 0.0D) {
+			return tangent(anchor, facing, variant, route, 0.0D);
+		}
+		if (progress >= 1.0D) {
+			return tangent(anchor, facing, variant, route, 1.0D);
+		}
+		return tangent(anchor, facing, variant, route, progress);
+	}
+
 	public static double progressStepForSpeed(final ParallelSidingSwitchRoute route, final double horizontalSpeed) {
-		double routeLength = route == ParallelSidingSwitchRoute.MAIN ? 1.0 : 1.55;
+		double length = routeLength(route);
 		double maxStep = route == ParallelSidingSwitchRoute.MAIN ? 0.32 : 0.22;
-		return Mth.clamp(Math.max(horizontalSpeed, 0.12) / routeLength, 0.04, maxStep);
+		return Mth.clamp(Math.max(horizontalSpeed, 0.12) / length, 0.04, maxStep);
 	}
 
 	public static double sideOffset(
@@ -90,11 +169,16 @@ public final class ParallelSidingSwitchMath {
 		final ParallelSidingSwitchVariant variant,
 		final Vec3 position
 	) {
-		return position.subtract(mainStart(anchor, facing)).dot(horizontal(variant.sideDirection(facing)));
+		Direction sideDirection = variant.sideDirection(facing);
+		double startX = anchor.getX() + 0.5D - facing.getStepX();
+		double startZ = anchor.getZ() + 0.5D - facing.getStepZ();
+		return (position.x - startX) * sideDirection.getStepX() + (position.z - startZ) * sideDirection.getStepZ();
 	}
 
 	public static double forwardOffset(final BlockPos anchor, final Direction facing, final Vec3 position) {
-		return position.subtract(mainStart(anchor, facing)).dot(horizontal(facing));
+		double startX = anchor.getX() + 0.5D - facing.getStepX();
+		double startZ = anchor.getZ() + 0.5D - facing.getStepZ();
+		return (position.x - startX) * facing.getStepX() + (position.z - startZ) * facing.getStepZ();
 	}
 
 	public static double horizontalDistanceSqr(final Vec3 a, final Vec3 b) {
@@ -107,30 +191,34 @@ public final class ParallelSidingSwitchMath {
 		return new Vec3(direction.getStepX(), 0.0, direction.getStepZ());
 	}
 
-	private static Vec3 mainStart(final BlockPos anchor, final Direction facing) {
-		return center(anchor.relative(facing.getOpposite()));
+	private static double sidingForward(final double t) {
+		return cubic(0.0D, SIDING_CONTROL_LENGTH, 1.0D - SIDING_CONTROL_LENGTH, 1.0D, t);
 	}
 
-	private static Vec3 sidingEnd(final BlockPos anchor, final Direction facing, final ParallelSidingSwitchVariant variant) {
-		return center(anchor.relative(variant.sideDirection(facing)));
+	private static double sidingSide(final double t) {
+		return t * t * (3.0D - 2.0D * t);
 	}
 
-	private static Vec3 center(final BlockPos pos) {
-		return new Vec3(pos.getX() + 0.5, pos.getY() + ROUTE_Y_OFFSET, pos.getZ() + 0.5);
+	private static double sidingForwardDerivative(final double t) {
+		return cubicDerivative(0.0D, SIDING_CONTROL_LENGTH, 1.0D - SIDING_CONTROL_LENGTH, 1.0D, t);
 	}
 
-	private static Vec3 cubic(final Vec3 p0, final Vec3 p1, final Vec3 p2, final Vec3 p3, final double t) {
+	private static double sidingSideDerivative(final double t) {
+		return 6.0D * t * (1.0D - t);
+	}
+
+	private static double cubic(final double p0, final double p1, final double p2, final double p3, final double t) {
 		double inv = 1.0 - t;
-		return p0.scale(inv * inv * inv)
-			.add(p1.scale(3.0 * inv * inv * t))
-			.add(p2.scale(3.0 * inv * t * t))
-			.add(p3.scale(t * t * t));
+		return p0 * inv * inv * inv
+			+ p1 * 3.0D * inv * inv * t
+			+ p2 * 3.0D * inv * t * t
+			+ p3 * t * t * t;
 	}
 
-	private static Vec3 cubicDerivative(final Vec3 p0, final Vec3 p1, final Vec3 p2, final Vec3 p3, final double t) {
+	private static double cubicDerivative(final double p0, final double p1, final double p2, final double p3, final double t) {
 		double inv = 1.0 - t;
-		return p1.subtract(p0).scale(3.0 * inv * inv)
-			.add(p2.subtract(p1).scale(6.0 * inv * t))
-			.add(p3.subtract(p2).scale(3.0 * t * t));
+		return (p1 - p0) * 3.0D * inv * inv
+			+ (p2 - p1) * 6.0D * inv * t
+			+ (p3 - p2) * 3.0D * t * t;
 	}
 }

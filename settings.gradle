@@ -11,4 +11,4 @@ pluginManagement {
 
 rootProject.name = 'peterwolfs-railroads-one'
 
-includeBuild('deps/minecart-chain')
+includeBuild('../minecart-chain')

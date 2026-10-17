@@ -2,10 +2,12 @@ package com.piotrek.peterwolfsrailroadsone;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseRailBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -26,7 +28,7 @@ public final class ParallelSidingSwitchPlacementHelper {
 		return new Placement(anchor, context.getHorizontalDirection(), variant);
 	}
 
-	public static boolean canPlace(final ServerLevel level, final Placement placement) {
+	public static boolean canPlace(final Level level, final Placement placement) {
 		return true;
 	}
 
@@ -38,6 +40,27 @@ public final class ParallelSidingSwitchPlacementHelper {
 				level.setBlock(marker.pos(), markerState(marker), 3);
 			}
 		}
+	}
+
+	public static Optional<Placement> placementFromMarker(final BlockPos pos, final BlockState state) {
+		if (!state.is(ModBlocks.PARALLEL_SIDING_SWITCH)
+			|| !state.hasProperty(ParallelSidingSwitchBlock.FACING)
+			|| !state.hasProperty(ParallelSidingSwitchBlock.VARIANT)
+			|| !state.hasProperty(ParallelSidingSwitchBlock.TILE)) {
+			return Optional.empty();
+		}
+
+		Direction facing = state.getValue(ParallelSidingSwitchBlock.FACING);
+		ParallelSidingSwitchVariant variant = state.getValue(ParallelSidingSwitchBlock.VARIANT);
+		ParallelSidingSwitchBlock.Tile tile = state.getValue(ParallelSidingSwitchBlock.TILE);
+		Direction side = variant.sideDirection(facing);
+		BlockPos anchor = switch (tile) {
+			case NW -> variant.isRight() ? pos : pos.relative(side.getOpposite());
+			case NE -> variant.isRight() ? pos.relative(side.getOpposite()) : pos;
+			case SW -> variant.isRight() ? pos.relative(facing) : pos.relative(facing).relative(side.getOpposite());
+			case SE -> variant.isRight() ? pos.relative(facing).relative(side.getOpposite()) : pos.relative(facing);
+		};
+		return Optional.of(new Placement(anchor, facing, variant));
 	}
 
 	public static void release(

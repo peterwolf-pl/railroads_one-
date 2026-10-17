@@ -12,11 +12,11 @@ import net.minecraft.world.level.block.state.BlockBehaviour;
 public final class ModBlocks {
 	public static final RailCurveMarkerBlock RAIL_CURVE_MARKER = registerBlock(
 		"rail_curve_marker",
-		key -> new RailCurveMarkerBlock(BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.2F).sound(SoundType.METAL).setId(key))
+		key -> new RailCurveMarkerBlock(BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.2F).sound(SoundType.METAL).noLootTable().setId(key))
 	);
 	public static final ParallelSidingSwitchBlock PARALLEL_SIDING_SWITCH = registerBlock(
 		"parallel_siding_switch",
-		key -> new ParallelSidingSwitchBlock(BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.2F).sound(SoundType.METAL).setId(key))
+		key -> new ParallelSidingSwitchBlock(BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.2F).sound(SoundType.METAL).noLootTable().setId(key))
 	);
 	public static final RailSemaphoreBlock RAIL_SEMAPHORE = registerBlock(
 		"rail_semaphore",
@@ -28,6 +28,18 @@ public final class ModBlocks {
 				.sound(SoundType.WOOD)
 				.lightLevel(state -> state.getValue(RailSemaphoreBlock.OCCUPIED) ? 12 : 0)
 				.setId(key)
+		)
+	);
+	public static final StraightRailBlock STRAIGHT_RAIL = registerBlock(
+		"straight_rail",
+		key -> new StraightRailBlock(
+			BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.7F).sound(SoundType.METAL).setId(key)
+		)
+	);
+	public static final CrossingRailBlock CROSSING_RAIL = registerBlock(
+		"crossing_rail",
+		key -> new CrossingRailBlock(
+			BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.7F).sound(SoundType.METAL).setId(key)
 		)
 	);
 

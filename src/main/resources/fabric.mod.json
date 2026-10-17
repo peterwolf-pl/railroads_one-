@@ -22,10 +22,10 @@
 		"peterwolfs_railroads_one.mixins.json"
 	],
 	"depends": {
-		"fabricloader": ">=0.19.3",
-		"minecraft": "~26.1.2",
+		"fabricloader": ">=0.19.5",
+		"minecraft": "~26.3",
 		"java": ">=25",
 		"fabric-api": "*",
-		"minecart_chain": ">=1.0.9"
+		"minecart_chain": ">=1.0.34"
 	}
 }

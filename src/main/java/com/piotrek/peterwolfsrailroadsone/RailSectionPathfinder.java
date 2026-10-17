@@ -242,6 +242,9 @@ final class RailSectionPathfinder {
 	}
 
 	private static Set<Direction> exits(final BlockState state) {
+		if (state.getBlock() instanceof CrossingRailBlock) {
+			return EnumSet.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
+		}
 		if (state.getBlock() instanceof BaseRailBlock rail) {
 			RailShape shape = state.getValue(rail.getShapeProperty());
 			return switch (shape) {

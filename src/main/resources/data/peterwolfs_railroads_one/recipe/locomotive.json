@@ -1,6 +1,6 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "transportation",
+  "category": "redstone",
   "ingredients": [
     "minecraft:furnace_minecart",
     "minecraft:lever",

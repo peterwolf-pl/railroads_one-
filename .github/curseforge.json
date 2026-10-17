@@ -1,0 +1,26 @@
+{
+  "projectId": 1654959,
+  "title": "Peterwolf's RailRoad's One",
+  "summary": "Adds smooth railroad curves and parallel siding switches for Minecraft minecarts.",
+  "description": "# Peterwolf's RailRoad's One\n\nPeterwolf's RailRoad's One is a Fabric prototype mod that adds smooth 3x3 railroad curves for Minecraft minecarts. The goal is to replace the sharp one-block 90 degree vanilla rail turn with a wider railway curve that reads more like real track geometry.\n\n## Features\n\n- Gentle Rail Curve Left 3x3 and Right 3x3 items.\n- Gentle Rail Curve Left 2x2 and Right 2x2 items.\n- Placeable 3x3 and 2x2 curve entities with saved orientation.\n- Occupancy markers that prevent overlapping curve placement.\n- Dedicated high-resolution image-tile models for the 3x3 and 2x2 curves.\n- Prototype minecart guidance that takes over nearby minecarts and moves them along a quarter-circle path.\n- Ready-to-place locomotive and locomotive-with-minecart items powered by the bundled Minecart Chain module.\n- Rail semaphores that protect connected sections, brake conflicting trains, and emit redstone power while red.\n- Two-section look-ahead clearance: a train moves only after reserving two consecutive protected sections.\n- Fair section reservations at merging tracks so one waiting train is released instead of both remaining stopped.\n- English and Polish translations.\n- Crafting recipes for both curve items.\n\n## Crafting\n\nBoth prototype items currently use the same recipe:\n\n```text\nRIR\nRSR\nRIR\n```\n\n`R` is a rail, `I` is an iron ingot, and `S` is a stick.\n\nTODO: split the left and right recipes into distinct patterns once the gameplay shape is final.\n\n## How To Use\n\n1. Start Minecraft with the mod installed.\n2. Take a 3x3 or 2x2 Gentle Rail Curve item from the tools and utilities creative tab.\n3. Right-click flat ground to place the curve.\n4. Rotate your player before placement to choose the curve orientation.\n5. Try placing another curve on the same 3x3 area; the mod should reject it.\n6. Push a minecart into the curve area to test the prototype arc guidance.\n\n## Building\n\nTargets **Minecraft 26.3** (Fabric Loader `0.19.5`, Fabric API `0.160.7+26.3`) and requires Minecart Chain `1.0.34`.\n\nThe Minecart Chain dependency is included in `deps/minecart-chain`, so the repository builds without a separate sibling checkout:\n\n```text\n./gradlew build\n```\n\nThe RailRoad's One JAR is generated in `build/libs/`.\n\n## Prototype Status\n\nThis is an intentionally practical first prototype. Placement, rotation, 3x3 occupancy, entity persistence, item UX, recipes, translations, and basic minecart curve guidance are implemented.\n\n## Known Limitations\n\n- Minecart physics are not fully integrated with vanilla rail behavior yet.\n- Technical marker blocks reserve the 3x3 footprint and are invisible in normal rendering.\n\n## Test Checklist\n\n1. Run Minecraft with the mod.\n2. Take Gentle Rail Curve Left.\n3. Place it on flat terrain.\n4. Check that it occupies a 3x3 area.\n5. Check rotation against player direction.\n6. Place a second curve nearby.\n7. Try placing a curve on an occupied area.\n8. Send a minecart into both curve sizes and check that it leaves the end of the curve instead of being held at the exit.\n\n## Roadmap\n\n- Tune minecart entry and exit detection for all vanilla cart types.\n- Add better rail connection handoff at curve endpoints.\n- Add final promotional artwork and screenshots.\n",
+  "enabled": false,
+  "releaseType": "release",
+  "changelogType": "markdown",
+  "changelog": "",
+  "manualRelease": false,
+  "media": {
+    "youtube": [],
+    "gallery": []
+  },
+  "dependencies": [
+    {
+      "slug": "fabric-api",
+      "type": "requiredDependency"
+    },
+    {
+      "slug": "minecart-chain",
+      "type": "requiredDependency"
+    }
+  ],
+  "publishedVersion": null
+}

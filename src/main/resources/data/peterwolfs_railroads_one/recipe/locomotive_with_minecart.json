@@ -1,6 +1,6 @@
 {
   "type": "minecraft:crafting_shapeless",
-  "category": "transportation",
+  "category": "redstone",
   "ingredients": [
     "peterwolfs_railroads_one:locomotive",
     "minecraft:minecart",

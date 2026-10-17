@@ -29,6 +29,14 @@ public final class TrainCollisionGuard {
 			return true;
 		}
 
+		if (MinecartTrainLogic.isExternallyGuided(first) || MinecartTrainLogic.isExternallyGuided(second)) {
+			return true;
+		}
+
+		if (GuidedTrack.isPresent(level, first.blockPosition()) || GuidedTrack.isPresent(level, second.blockPosition())) {
+			return true;
+		}
+
 		net.minecraft.core.BlockPos track1 = RailSectionPathfinder.trackPositionForCart(level, first);
 		net.minecraft.core.BlockPos track2 = RailSectionPathfinder.trackPositionForCart(level, second);
 		boolean onSameLine = track1.equals(track2) || RailSectionPathfinder.findPath(level, track1, track2, 3).isPresent();
@@ -56,6 +64,13 @@ public final class TrainCollisionGuard {
 	}
 
 	private static boolean inSameTrain(final ServerLevel level, final AbstractMinecart first, final AbstractMinecart second) {
+		MinecartChainAccess firstLinks = (MinecartChainAccess) first;
+		UUID secondId = second.getUUID();
+		if (firstLinks.minecartChain$getFirstLink().filter(secondId::equals).isPresent()
+			|| firstLinks.minecartChain$getSecondLink().filter(secondId::equals).isPresent()) {
+			return true;
+		}
+
 		Queue<AbstractMinecart> pending = new ArrayDeque<>();
 		Set<UUID> seen = new HashSet<>();
 		pending.add(first);

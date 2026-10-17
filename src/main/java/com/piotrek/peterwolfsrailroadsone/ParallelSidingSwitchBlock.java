@@ -1,5 +1,6 @@
 package com.piotrek.peterwolfsrailroadsone;
 
+import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -57,8 +58,22 @@ public class ParallelSidingSwitchBlock extends Block {
 	@Override
 	public BlockState playerWillDestroy(final Level level, final BlockPos pos, final BlockState state, final Player player) {
 		if (level instanceof ServerLevel serverLevel) {
-			serverLevel.getEntities(ModEntities.PARALLEL_SIDING_SWITCH, new AABB(pos).inflate(2.5), entity -> entity.ownsMarker(pos))
-				.forEach(entity -> entity.remove(Entity.RemovalReason.KILLED));
+			List<ParallelSidingSwitchEntity> switches = serverLevel.getEntities(
+				ModEntities.PARALLEL_SIDING_SWITCH,
+				new AABB(pos).inflate(2.5),
+				entity -> entity.ownsMarker(pos)
+			);
+			ParallelSidingSwitchVariant variant = !switches.isEmpty()
+				? switches.get(0).variant()
+				: state.getValue(VARIANT);
+			if (!switches.isEmpty()) {
+				switches.forEach(entity -> entity.remove(Entity.RemovalReason.KILLED));
+			} else {
+				ParallelSidingSwitchPlacementHelper.placementFromMarker(pos, state).ifPresent(placement ->
+					ParallelSidingSwitchPlacementHelper.release(serverLevel, placement.anchor(), placement.facing(), placement.variant())
+				);
+			}
+			ModItems.dropPiece(serverLevel, pos, player, ModItems.parallelSidingSwitch(variant));
 		}
 		return super.playerWillDestroy(level, pos, state, player);
 	}

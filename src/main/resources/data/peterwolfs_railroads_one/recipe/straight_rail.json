@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "ingredients": [
+    "minecraft:rail"
+  ],
+  "result": {
+    "id": "peterwolfs_railroads_one:straight_rail",
+    "count": 1
+  }
+}

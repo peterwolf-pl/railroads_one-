@@ -3,12 +3,14 @@ package com.piotrek.peterwolfsrailroadsone;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.context.UseOnContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 public final class CurvePlacementHelper {
@@ -24,7 +26,7 @@ public final class CurvePlacementHelper {
 		return new Placement(anchor, context.getHorizontalDirection(), turn, size);
 	}
 
-	public static boolean canPlace(final ServerLevel level, final Placement placement) {
+	public static boolean canPlace(final Level level, final Placement placement) {
 		Set<BlockPos> footprint = new HashSet<>(occupiedPositions(
 			placement.anchor(),
 			placement.facing(),
@@ -43,7 +45,7 @@ public final class CurvePlacementHelper {
 			entity -> true
 		);
 		for (GentleRailCurveEntity curve : curves) {
-			if (!curve.hasCompleteMarkerFootprint(level)) {
+			if (level instanceof ServerLevel serverLevel && !curve.hasCompleteMarkerFootprint(serverLevel)) {
 				curve.remove(Entity.RemovalReason.KILLED);
 				continue;
 			}
@@ -71,6 +73,65 @@ public final class CurvePlacementHelper {
 				level.removeBlock(pos, false);
 			}
 		}
+	}
+
+	public static Optional<GentleRailCurveEntity> findCurve(final ServerLevel level, final BlockPos markerPos) {
+		return level.getEntities(
+			ModEntities.GENTLE_RAIL_CURVE,
+			new net.minecraft.world.phys.AABB(markerPos).inflate(4.5D),
+			entity -> entity.ownsMarker(markerPos)
+		).stream().findFirst();
+	}
+
+	public static boolean restoreMissingCurve(
+		final ServerLevel level,
+		final BlockPos markerPos,
+		final BlockState markerState
+	) {
+		if (findCurve(level, markerPos).isPresent()) {
+			return true;
+		}
+
+		Optional<Placement> placement = placementFromMarker(markerPos, markerState);
+		if (placement.isEmpty() || !hasCompleteMarkerFootprint(level, placement.get())) {
+			return false;
+		}
+
+		Placement restored = placement.get();
+		GentleRailCurveEntity entity = new GentleRailCurveEntity(ModEntities.GENTLE_RAIL_CURVE, level);
+		entity.configure(restored.anchor(), restored.facing(), restored.turn(), restored.size());
+		return level.addFreshEntity(entity);
+	}
+
+	public static Optional<Placement> placementFromMarker(final BlockPos markerPos, final BlockState markerState) {
+		if (!markerState.is(ModBlocks.RAIL_CURVE_MARKER)
+			|| !markerState.hasProperty(RailCurveMarkerBlock.FACING)
+			|| !markerState.hasProperty(RailCurveMarkerBlock.SEGMENT)) {
+			return Optional.empty();
+		}
+
+		TileCoordinates tile = TileCoordinates.from(markerState.getValue(RailCurveMarkerBlock.SEGMENT));
+		if (tile == null) {
+			return Optional.empty();
+		}
+
+		Direction facing = markerState.getValue(RailCurveMarkerBlock.FACING);
+		Direction back = facing.getOpposite();
+		Direction exit = exitDirection(facing, tile.turn());
+		int exitOffset = tile.turn() == CurveTurn.RIGHT
+			? tile.column()
+			: tile.size().blocks() - 1 - tile.column();
+		BlockPos anchor = markerPos.relative(back.getOpposite(), tile.row()).relative(exit.getOpposite(), exitOffset);
+		return Optional.of(new Placement(anchor, facing, tile.turn(), tile.size()));
+	}
+
+	private static boolean hasCompleteMarkerFootprint(final ServerLevel level, final Placement placement) {
+		for (BlockPos pos : occupiedPositions(placement.anchor(), placement.facing(), placement.turn(), placement.size())) {
+			if (!level.hasChunkAt(pos) || !level.getBlockState(pos).is(ModBlocks.RAIL_CURVE_MARKER)) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	public static List<BlockPos> occupiedPositions(final BlockPos anchor, final Direction facing, final CurveTurn turn, final CurveSize size) {
@@ -176,5 +237,34 @@ public final class CurvePlacementHelper {
 	}
 
 	public record Marker(BlockPos pos, Direction facing, RailCurveMarkerBlock.Segment segment) {
+	}
+
+	private record TileCoordinates(CurveTurn turn, CurveSize size, int row, int column) {
+		private static TileCoordinates from(final RailCurveMarkerBlock.Segment segment) {
+			String name = segment.name();
+			CurveTurn turn = name.startsWith("RIGHT_") ? CurveTurn.RIGHT : name.startsWith("LEFT_") ? CurveTurn.LEFT : null;
+			CurveSize size = name.contains("_3X3_") ? CurveSize.LARGE_3X3 : name.contains("_2X2_") ? CurveSize.SMALL_2X2 : null;
+			if (turn == null || size == null) {
+				return null;
+			}
+
+			String tile = name.substring(name.lastIndexOf('_') + 1);
+			int row = switch (tile) {
+				case "NW", "N", "NE" -> 0;
+				case "W", "CENTER", "E" -> 1;
+				case "SW", "S", "SE" -> 2;
+				default -> -1;
+			};
+			int column = switch (tile) {
+				case "NW", "W", "SW" -> 0;
+				case "N", "CENTER", "S" -> 1;
+				case "NE", "E", "SE" -> 2;
+				default -> -1;
+			};
+			if (row < 0 || column < 0 || row >= size.blocks() || column >= size.blocks()) {
+				return null;
+			}
+			return new TileCoordinates(turn, size, row, column);
+		}
 	}
 }

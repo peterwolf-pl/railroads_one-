@@ -4,8 +4,11 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.StringRepresentable;
+import java.util.Optional;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.InsideBlockEffectApplier;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -47,10 +50,39 @@ public class RailCurveMarkerBlock extends Block {
 	@Override
 	public BlockState playerWillDestroy(final Level level, final BlockPos pos, final BlockState state, final Player player) {
 		if (level instanceof ServerLevel serverLevel) {
-			serverLevel.getEntities(ModEntities.GENTLE_RAIL_CURVE, new AABB(pos).inflate(3.0), entity -> entity.ownsMarker(pos))
-				.forEach(entity -> entity.remove(Entity.RemovalReason.KILLED));
+			Optional<GentleRailCurveEntity> curve = CurvePlacementHelper.findCurve(serverLevel, pos);
+			Optional<CurvePlacementHelper.Placement> placement = curve
+				.map(entity -> new CurvePlacementHelper.Placement(entity.anchor(), entity.facing(), entity.turn(), entity.size()))
+				.or(() -> CurvePlacementHelper.placementFromMarker(pos, state));
+			if (curve.isPresent()) {
+				curve.get().remove(Entity.RemovalReason.KILLED);
+			} else {
+				placement.ifPresent(piece -> CurvePlacementHelper.release(
+					serverLevel,
+					piece.anchor(),
+					piece.facing(),
+					piece.turn(),
+					piece.size()
+				));
+			}
+			placement.ifPresent(piece -> ModItems.dropPiece(serverLevel, pos, player, ModItems.gentleRailCurve(piece.turn(), piece.size())));
 		}
 		return super.playerWillDestroy(level, pos, state, player);
+	}
+
+	@Override
+	protected void entityInside(
+		final BlockState state,
+		final Level level,
+		final BlockPos pos,
+		final Entity entity,
+		final InsideBlockEffectApplier effects,
+		final boolean intersectsCollisionShape
+	) {
+		super.entityInside(state, level, pos, entity, effects, intersectsCollisionShape);
+		if (entity instanceof AbstractMinecart && level instanceof ServerLevel serverLevel) {
+			CurvePlacementHelper.restoreMissingCurve(serverLevel, pos, state);
+		}
 	}
 
 	@Override

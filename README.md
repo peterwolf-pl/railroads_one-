@@ -42,6 +42,8 @@ TODO: split the left and right recipes into distinct patterns once the gameplay 
 
 ## Building
 
+Targets **Minecraft 26.3** (Fabric Loader `0.19.5`, Fabric API `0.160.7+26.3`) and requires Minecart Chain `1.0.34`.
+
 The Minecart Chain dependency is included in `deps/minecart-chain`, so the repository builds without a separate sibling checkout:
 
 ```text

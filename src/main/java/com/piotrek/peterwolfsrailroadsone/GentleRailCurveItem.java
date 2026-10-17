@@ -24,19 +24,23 @@ public class GentleRailCurveItem extends Item {
 
 	@Override
 	public InteractionResult useOn(final UseOnContext context) {
-		if (context.getLevel().isClientSide()) {
-			return InteractionResult.SUCCESS;
-		}
-		if (!(context.getLevel() instanceof ServerLevel level)) {
-			return InteractionResult.FAIL;
-		}
-
 		Player player = context.getPlayer();
 		if (player == null) {
 			return InteractionResult.FAIL;
 		}
 
 		CurvePlacementHelper.Placement placement = CurvePlacementHelper.fromUseContext(context, this.turn, this.size);
+		if (context.getLevel().isClientSide()) {
+			if (!CurvePlacementHelper.canPlace(context.getLevel(), placement)) {
+				return InteractionResult.FAIL;
+			}
+			context.getItemInHand().consume(1, player);
+			return InteractionResult.SUCCESS;
+		}
+		if (!(context.getLevel() instanceof ServerLevel level)) {
+			return InteractionResult.FAIL;
+		}
+
 		if (!CurvePlacementHelper.canPlace(level, placement)) {
 			player.sendSystemMessage(Component.translatable("message.peterwolfs_railroads_one.not_enough_space_" + this.size.label()));
 			return InteractionResult.FAIL;
@@ -46,10 +50,7 @@ public class GentleRailCurveItem extends Item {
 		entity.configure(placement.anchor(), placement.facing(), this.turn, this.size);
 		CurvePlacementHelper.reserve(level, placement);
 		level.addFreshEntity(entity);
-
-		if (!player.getAbilities().instabuild) {
-			context.getItemInHand().shrink(1);
-		}
+		context.getItemInHand().consume(1, player);
 		return InteractionResult.SUCCESS;
 	}
 

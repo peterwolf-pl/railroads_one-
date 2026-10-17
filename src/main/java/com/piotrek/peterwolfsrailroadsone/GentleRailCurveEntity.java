@@ -1,7 +1,10 @@
 package com.piotrek.peterwolfsrailroadsone;
 
+import com.piotrek.minecartchain.MinecartTrainLogic;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -24,7 +27,6 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public class GentleRailCurveEntity extends Entity {
-	private static final float MAX_CART_YAW_STEP = 28.0F;
 	private static final int FOOTPRINT_CHECK_INTERVAL_TICKS = 20;
 	private static final EntityDataAccessor<Integer> FACING = SynchedEntityData.defineId(GentleRailCurveEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Boolean> RIGHT_TURN = SynchedEntityData.defineId(GentleRailCurveEntity.class, EntityDataSerializers.BOOLEAN);
@@ -32,6 +34,8 @@ public class GentleRailCurveEntity extends Entity {
 	private BlockPos anchor = BlockPos.ZERO;
 	private final Map<UUID, CurveRideState> activeCarts = new HashMap<>();
 	private final Map<UUID, ReleasedCartState> releasedCarts = new HashMap<>();
+	private final Set<UUID> seenCarts = new HashSet<>();
+	private AABB cartGuideArea;
 
 	public GentleRailCurveEntity(final EntityType<? extends GentleRailCurveEntity> type, final Level level) {
 		super(type, level);
@@ -45,7 +49,9 @@ public class GentleRailCurveEntity extends Entity {
 		this.entityData.set(RIGHT_TURN, turn == CurveTurn.RIGHT);
 		this.entityData.set(CURVE_SIZE, size.id());
 		this.setPos(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.5);
-		this.setBoundingBox(CurvePlacementHelper.placementBounds(new CurvePlacementHelper.Placement(anchor, facing, turn, size)).inflate(0.05, 0.25, 0.05));
+		AABB placementBounds = CurvePlacementHelper.placementBounds(new CurvePlacementHelper.Placement(anchor, facing, turn, size));
+		this.setBoundingBox(placementBounds.inflate(0.05, 0.25, 0.05));
+		this.cartGuideArea = placementBounds.inflate(2.75, 0.75, 2.75);
 		this.setYRot(facing.toYRot());
 	}
 
@@ -92,8 +98,12 @@ public class GentleRailCurveEntity extends Entity {
 				this.remove(Entity.RemovalReason.KILLED);
 				return;
 			}
-			this.guideNearbyMinecarts(serverLevel);
+			TrackGuidanceScheduler.queue(serverLevel, this);
 		}
+	}
+
+	void guideAfterEntityTicks(final ServerLevel level) {
+		this.guideNearbyMinecarts(level);
 	}
 
 	@Override
@@ -143,88 +153,228 @@ public class GentleRailCurveEntity extends Entity {
 	}
 
 	private void guideNearbyMinecarts(final ServerLevel level) {
-		AABB area = CurvePlacementHelper.placementBounds(new CurvePlacementHelper.Placement(this.anchor, this.facing(), this.turn(), this.size()))
-			.inflate(1.25, 0.75, 1.25);
-		Set<UUID> seenCarts = new HashSet<>();
-		for (AbstractMinecart minecart : level.getEntities(EntityTypeTest.forClass(AbstractMinecart.class), area, cart -> !cart.isRemoved())) {
-			seenCarts.add(minecart.getUUID());
-			double nearestProgress = CurveMath.nearestProgress(this.anchor, this.facing(), this.turn(), this.size(), minecart.position());
-			ReleasedCartState releasedCart = this.releasedCarts.get(minecart.getUUID());
-			if (releasedCart != null) {
-				if (releasedCart.shouldIgnore(minecart, this.facing(), this.turn(), nearestProgress)) {
+		this.seenCarts.clear();
+		List<AbstractMinecart> nearby = new ArrayList<>();
+		for (AbstractMinecart minecart : level.getEntities(EntityTypeTest.forClass(AbstractMinecart.class), this.cartGuideArea, cart -> !cart.isRemoved())) {
+			nearby.add(minecart);
+			this.seenCarts.add(minecart.getUUID());
+			for (AbstractMinecart linked : GuidedConsist.linkedTo(level, minecart)) {
+				this.seenCarts.add(linked.getUUID());
+			}
+		}
+
+		Set<UUID> nearbyIds = new HashSet<>(this.seenCarts);
+		List<AbstractMinecart> guidableLeaders = new ArrayList<>();
+		for (AbstractMinecart minecart : nearby) {
+			if (this.isFollowerOfGuidedConsist(level, minecart, nearbyIds)) {
+				continue;
+			}
+			if (this.prepareRide(minecart)) {
+				guidableLeaders.add(minecart);
+			}
+		}
+		this.activeCarts.keySet().removeIf(id -> !this.seenCarts.contains(id));
+		this.releasedCarts.keySet().removeIf(id -> !this.seenCarts.contains(id));
+
+		for (AbstractMinecart minecart : guidableLeaders) {
+			this.advanceIndependent(minecart);
+		}
+		for (AbstractMinecart minecart : guidableLeaders) {
+			CurveRideState leaderState = this.activeCarts.get(minecart.getUUID());
+			if (leaderState == null) {
+				continue;
+			}
+
+			Map<UUID, Integer> hops = GuidedConsist.hopsFrom(level, minecart);
+			AbstractMinecart consistLeader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+			for (AbstractMinecart linked : GuidedConsist.linkedTo(level, minecart)) {
+				if (linked.getUUID().equals(minecart.getUUID())) {
 					continue;
 				}
-				this.releasedCarts.remove(minecart.getUUID());
+				if (consistLeader != null && consistLeader.getUUID().equals(linked.getUUID())) {
+					continue;
+				}
+				this.followLeader(linked, minecart, leaderState, Math.max(1, hops.getOrDefault(linked.getUUID(), 1)));
 			}
-
-			CurveRideState rideState = this.activeCarts.computeIfAbsent(
-				minecart.getUUID(),
-				id -> CurveMath.horizontalDistanceSqr(minecart.position(), CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), nearestProgress)) <= captureDistanceSqr(this.size())
-					? CurveRideState.start(minecart, this.facing(), this.turn(), nearestProgress)
-					: null
-			);
-			if (rideState == null) {
-				continue;
-			}
-			Vec3 expected = CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), rideState.progress);
-			Vec3 nearest = CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), nearestProgress);
-			if (
-				CurveMath.horizontalDistanceSqr(minecart.position(), expected) > 2.25
-					&& CurveMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.35
-			) {
-				this.activeCarts.remove(minecart.getUUID());
-				continue;
-			}
-
-			double speed = rideState.trackSpeed(minecart.getDeltaMovement().horizontalDistance(), this.size());
-			double nextProgress = rideState.progress + CurveMath.progressStepForSpeed(this.size(), speed) * rideState.direction;
-			if (nextProgress >= 1.0 || nextProgress <= 0.0) {
-				double exitProgress = rideState.direction > 0.0 ? 1.0 : 0.0;
-				Vec3 exitTangent = CurveMath.tangent(this.facing(), this.turn(), exitProgress).scale(rideState.direction);
-				Vec3 exitPos = CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), exitProgress)
-					.add(exitTangent.scale(exitNudge(speed)));
-				applyCartPose(minecart, exitPos, exitTangent, speed);
-				this.activeCarts.remove(minecart.getUUID());
-				this.releasedCarts.put(minecart.getUUID(), new ReleasedCartState(rideState.direction));
-				continue;
-			}
-
-			rideState.progress = nextProgress;
-			Vec3 target = CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), nextProgress);
-			Vec3 nextTangent = CurveMath.tangent(this.facing(), this.turn(), nextProgress).scale(rideState.direction);
-			applyCartPose(minecart, target, nextTangent, speed);
 		}
-		this.activeCarts.keySet().removeIf(id -> !seenCarts.contains(id));
-		this.releasedCarts.keySet().removeIf(id -> !seenCarts.contains(id));
 	}
 
-	private static void applyCartPose(final AbstractMinecart minecart, final Vec3 position, final Vec3 tangent, final double speed) {
-		minecart.setPos(position.x, position.y, position.z);
-		minecart.setDeltaMovement(tangent.scale(Math.max(CurveRideState.MIN_GUIDED_SPEED, speed)));
-		minecart.setYRot(smoothedCartYaw(minecart.getYRot(), tangent));
-		minecart.setXRot(0.0F);
+	private boolean isFollowerOfGuidedConsist(
+		final ServerLevel level,
+		final AbstractMinecart minecart,
+		final Set<UUID> nearbyIds
+	) {
+		AbstractMinecart leader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+		if (leader == null || leader.getUUID().equals(minecart.getUUID())) {
+			return false;
+		}
+		if (this.activeCarts.containsKey(leader.getUUID())) {
+			return true;
+		}
+		if (nearbyIds.contains(leader.getUUID()) && !this.releasedCarts.containsKey(leader.getUUID())) {
+			return true;
+		}
+		return MinecartTrainLogic.isExternallyGuided(leader);
 	}
 
-	private static float smoothedCartYaw(final float currentYaw, final Vec3 tangent) {
-		float targetYaw = closestCartYaw(currentYaw, tangent);
-		float delta = Mth.wrapDegrees(targetYaw - currentYaw);
-		return Mth.wrapDegrees(currentYaw + Mth.clamp(delta, -MAX_CART_YAW_STEP, MAX_CART_YAW_STEP));
+	private boolean prepareRide(final AbstractMinecart minecart) {
+		if (minecart.level() instanceof ServerLevel serverLevel
+			&& this.isFollowerOfGuidedConsist(serverLevel, minecart, this.seenCarts)) {
+			return false;
+		}
+
+		double nearestProgress = CurveMath.nearestProgress(this.anchor, this.facing(), this.turn(), this.size(), minecart.position());
+		ReleasedCartState releasedCart = this.releasedCarts.get(minecart.getUUID());
+		if (releasedCart != null) {
+			if (releasedCart.shouldIgnore(minecart, this.facing(), this.turn(), nearestProgress)) {
+				return false;
+			}
+			this.releasedCarts.remove(minecart.getUUID());
+		}
+
+		CurveRideState rideState = this.activeCarts.computeIfAbsent(
+			minecart.getUUID(),
+			id -> CurveMath.horizontalDistanceSqr(minecart.position(), CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), nearestProgress)) <= captureDistanceSqr(this.size())
+				? CurveRideState.start(minecart, this.facing(), this.turn(), nearestProgress)
+				: null
+		);
+		if (rideState == null) {
+			return false;
+		}
+
+		Vec3 expected = CurveMath.pointExtended(this.anchor, this.facing(), this.turn(), this.size(), rideState.progress);
+		Vec3 nearest = CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), nearestProgress);
+		if (
+			CurveMath.horizontalDistanceSqr(minecart.position(), expected) > 2.25
+				&& CurveMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.35
+		) {
+			this.activeCarts.remove(minecart.getUUID());
+			return false;
+		}
+		return true;
 	}
 
-	private static float closestCartYaw(final float currentYaw, final Vec3 tangent) {
-		float forwardYaw = tangentYaw(tangent);
-		float reversedYaw = Mth.wrapDegrees(forwardYaw + 180.0F);
-		float forwardDelta = Math.abs(Mth.wrapDegrees(forwardYaw - currentYaw));
-		float reversedDelta = Math.abs(Mth.wrapDegrees(reversedYaw - currentYaw));
-		return forwardDelta <= reversedDelta ? forwardYaw : reversedYaw;
+	private void advanceIndependent(final AbstractMinecart minecart) {
+		CurveRideState rideState = this.activeCarts.get(minecart.getUUID());
+		if (rideState == null) {
+			return;
+		}
+
+		double speed = rideState.trackSpeed(minecart.getDeltaMovement().horizontalDistance(), this.size());
+		double progressStep = CurveMath.progressStepForSpeed(this.size(), speed);
+		this.moveToProgress(minecart, rideState, rideState.progress + progressStep * rideState.direction, speed, rideState);
 	}
 
-	private static float tangentYaw(final Vec3 tangent) {
-		return Mth.wrapDegrees((float)(Mth.atan2(tangent.z, tangent.x) * 180.0F / Math.PI) - 90.0F);
+	private void followLeader(
+		final AbstractMinecart minecart,
+		final AbstractMinecart leader,
+		final CurveRideState leaderState,
+		final int hops
+	) {
+		double next = GuidedConsist.followProgress(
+			leaderState.progress,
+			leaderState.direction,
+			hops,
+			CurveMath.arcLength(this.size())
+		);
+		double minSeparation = MinecartTrainLogic.couplingDistance() * 0.85D;
+		for (int i = 0; i < 8; i++) {
+			if (CurveMath.horizontalDistanceSqr(
+				CurveMath.pointExtended(this.anchor, this.facing(), this.turn(), this.size(), next),
+				leader.position()
+			) >= minSeparation * minSeparation) {
+				break;
+			}
+			next -= leaderState.direction * 0.08D;
+		}
+
+		double speed = Math.max(CurveRideState.MIN_GUIDED_SPEED, leaderState.retainedSpeed);
+		CurveRideState followState = CurveRideState.follow(leaderState, next, speed);
+		this.activeCarts.put(minecart.getUUID(), followState);
+		this.seenCarts.add(minecart.getUUID());
+		this.moveToProgress(minecart, followState, next, speed, leaderState);
+	}
+
+	private void moveToProgress(
+		final AbstractMinecart minecart,
+		final CurveRideState rideState,
+		final double nextProgress,
+		final double speed,
+		final CurveRideState yawSource
+	) {
+		boolean pastForwardExit = yawSource.direction > 0.0D && nextProgress >= 1.0D;
+		boolean pastReverseExit = yawSource.direction < 0.0D && nextProgress <= 0.0D;
+		if (pastForwardExit || pastReverseExit) {
+			double exitProgress = pastForwardExit ? 1.0 : 0.0;
+			Vec3 exitTangent = CurveMath.tangent(this.facing(), this.turn(), exitProgress).scale(yawSource.direction);
+			Vec3 exitPos = this.handoffPosition(
+				CurveMath.pointOnCurve(this.anchor, this.facing(), this.turn(), this.size(), exitProgress),
+				exitTangent
+			);
+			this.applyCartPose(minecart, exitPos, exitTangent.scale(speed), yawSource, exitProgress);
+			this.activeCarts.remove(minecart.getUUID());
+			this.releasedCarts.put(minecart.getUUID(), new ReleasedCartState(yawSource.direction));
+			return;
+		}
+
+		rideState.progress = nextProgress;
+		Vec3 target = CurveMath.pointExtended(this.anchor, this.facing(), this.turn(), this.size(), nextProgress);
+		Vec3 nextTangent = CurveMath.tangentExtended(this.facing(), this.turn(), nextProgress).scale(yawSource.direction);
+		double followingProgress = nextProgress + CurveMath.progressStepForSpeed(this.size(), speed) * yawSource.direction;
+		Vec3 followingTarget = CurveMath.pointExtended(
+			this.anchor, this.facing(), this.turn(), this.size(), followingProgress
+		);
+		Vec3 pathMovement = alignedPathMovement(
+			followingTarget.subtract(target).horizontal(),
+			nextTangent,
+			Math.max(CurveRideState.MIN_GUIDED_SPEED, speed)
+		);
+		this.applyCartPose(minecart, target, pathMovement, yawSource, nextProgress);
+	}
+
+	private void applyCartPose(
+		final AbstractMinecart minecart,
+		final Vec3 position,
+		final Vec3 pathMovement,
+		final CurveRideState rideState,
+		final double progress
+	) {
+		float yaw = CurveMath.yawAlongCurve(
+			rideState.entryYaw, this.turn(), rideState.entryProgress, progress
+		);
+		GuidedMinecartPose.apply(
+			minecart,
+			position,
+			pathMovement,
+			GuidedMinecartPose.flippedMatchingYaw(yaw, pathMovement, rideState.flippedPose),
+			yaw
+		);
+	}
+
+	private static Vec3 alignedPathMovement(final Vec3 pathMovement, final Vec3 travelTangent, final double speed) {
+		if (pathMovement.lengthSqr() <= 1.0E-8D) {
+			return travelTangent.scale(speed);
+		}
+		return pathMovement.dot(travelTangent) < 0.0D ? pathMovement.reverse() : pathMovement;
+	}
+
+	private Vec3 handoffPosition(final Vec3 exitPos, final Vec3 exitTangent) {
+		Vec3 direction = exitTangent.horizontal();
+		if (direction.lengthSqr() <= 1.0E-8D) {
+			return exitPos;
+		}
+
+		Vec3 unit = direction.normalize();
+		Vec3 candidate = exitPos.add(unit.scale(0.55D));
+		BlockPos railPos = BlockPos.containing(candidate.x, this.anchor.getY(), candidate.z);
+		if (this.level() instanceof ServerLevel serverLevel && GuidedTrack.isPresent(serverLevel, railPos)) {
+			return new Vec3(railPos.getX() + 0.5D, this.anchor.getY() + 0.08D, railPos.getZ() + 0.5D);
+		}
+		return candidate;
 	}
 
 	private static double exitNudge(final double speed) {
-		return Mth.clamp(speed * 0.35, 0.08, 0.2);
+		return Mth.clamp(speed * 0.5, 0.35, 0.55);
 	}
 
 	private static double captureDistanceSqr(final CurveSize size) {
@@ -236,12 +386,46 @@ public class GentleRailCurveEntity extends Entity {
 		private static final double MIN_GUIDED_SPEED = 0.12;
 		private double progress;
 		private final double direction;
+		private final boolean flippedPose;
+		private final float entryYaw;
+		private final double entryProgress;
 		private double retainedSpeed;
 
-		private CurveRideState(final double progress, final double direction, final double entrySpeed) {
+		private CurveRideState(
+			final double progress,
+			final double direction,
+			final boolean flippedPose,
+			final double entrySpeed,
+			final float entryYaw
+		) {
+			this(progress, direction, flippedPose, entrySpeed, entryYaw, progress);
+		}
+
+		private CurveRideState(
+			final double progress,
+			final double direction,
+			final boolean flippedPose,
+			final double entrySpeed,
+			final float entryYaw,
+			final double entryProgress
+		) {
 			this.progress = progress;
 			this.direction = direction;
+			this.flippedPose = flippedPose;
+			this.entryYaw = entryYaw;
+			this.entryProgress = entryProgress;
 			this.retainedSpeed = Math.max(MIN_GUIDED_SPEED, entrySpeed);
+		}
+
+		private static CurveRideState follow(final CurveRideState leader, final double progress, final double speed) {
+			return new CurveRideState(
+				progress,
+				leader.direction,
+				leader.flippedPose,
+				speed,
+				leader.entryYaw,
+				leader.entryProgress
+			);
 		}
 
 		private static CurveRideState start(
@@ -253,8 +437,14 @@ public class GentleRailCurveEntity extends Entity {
 			Vec3 tangent = CurveMath.tangent(facing, turn, progress);
 			double entrySpeed = minecart.getDeltaMovement().horizontalDistance();
 			double dot = minecart.getDeltaMovement().dot(tangent);
-			double direction = Math.abs(dot) > 0.02 ? Math.signum(dot) : (progress > 0.5 ? -1.0 : 1.0);
-			return new CurveRideState(progress, direction, entrySpeed);
+			double direction = Math.abs(dot) > 0.02 ? Math.signum(dot) : 1.0D;
+			return new CurveRideState(
+				progress,
+				direction,
+				minecart.isFlipped(),
+				entrySpeed,
+				minecart.getYRot()
+			);
 		}
 
 		private double trackSpeed(final double currentSpeed, final CurveSize size) {
@@ -272,6 +462,10 @@ public class GentleRailCurveEntity extends Entity {
 		}
 
 		private boolean shouldIgnore(final AbstractMinecart minecart, final Direction facing, final CurveTurn turn, final double progress) {
+			if (!GuidedTrack.isPresent(minecart.level(), minecart.blockPosition())) {
+				return false;
+			}
+
 			double exitProgress = this.direction > 0.0 ? 1.0 : 0.0;
 			boolean stillAtExit = this.direction > 0.0 ? progress > 0.72 : progress < 0.28;
 			if (!stillAtExit) {

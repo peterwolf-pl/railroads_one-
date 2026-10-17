@@ -1,7 +1,10 @@
 package com.piotrek.peterwolfsrailroadsone;
 
+import com.piotrek.minecartchain.MinecartTrainLogic;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -17,26 +20,28 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.vehicle.minecart.AbstractMinecart;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.BaseRailBlock;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.entity.EntityTypeTest;
-import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.block.state.properties.Property;
-import net.minecraft.world.level.block.state.properties.RailShape;
 import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public class ParallelSidingSwitchEntity extends Entity {
-	private static final float MAX_CART_YAW_STEP = 28.0F;
 	private static final int MAINTENANCE_INTERVAL_TICKS = 20;
+	private static final int ROUTE_LOCK_RELEASE_GRACE_TICKS = 40;
+	private static final double CAPTURE_MIN_PROGRESS = -0.25D;
+	private static final double CAPTURE_MAX_PROGRESS = 1.2D;
+	private static final double STRAGGLER_MIN_PROGRESS = -0.5D;
+	private static final double STRAGGLER_MAX_PROGRESS = 2.5D;
 	private static final EntityDataAccessor<Integer> FACING = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.INT);
 	private static final EntityDataAccessor<Boolean> RIGHT_VARIANT = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.BOOLEAN);
 	private static final EntityDataAccessor<Boolean> POWERED = SynchedEntityData.defineId(ParallelSidingSwitchEntity.class, EntityDataSerializers.BOOLEAN);
 	private BlockPos anchor = BlockPos.ZERO;
 	private final Map<UUID, SwitchRideState> activeCarts = new HashMap<>();
 	private final Map<UUID, ReleasedSwitchState> releasedCarts = new HashMap<>();
+	private final Map<UUID, SwitchRouteLock> routeLocks = new HashMap<>();
+	private final Set<UUID> seenCarts = new HashSet<>();
+	private AABB cartGuideArea;
 
 	public ParallelSidingSwitchEntity(final EntityType<? extends ParallelSidingSwitchEntity> type, final Level level) {
 		super(type, level);
@@ -55,7 +60,9 @@ public class ParallelSidingSwitchEntity extends Entity {
 		this.entityData.set(RIGHT_VARIANT, variant.isRight());
 		this.entityData.set(POWERED, powered);
 		this.setPos(anchor.getX() + 0.5, anchor.getY(), anchor.getZ() + 0.5);
-		this.setBoundingBox(ParallelSidingSwitchPlacementHelper.placementBounds(this.placement()).inflate(0.05, 0.25, 0.05));
+		AABB placementBounds = ParallelSidingSwitchPlacementHelper.placementBounds(this.placement());
+		this.setBoundingBox(placementBounds.inflate(0.05, 0.25, 0.05));
+		this.cartGuideArea = placementBounds.inflate(2.75, 0.75, 2.75);
 		this.setYRot(facing.toYRot());
 	}
 
@@ -94,10 +101,13 @@ public class ParallelSidingSwitchEntity extends Entity {
 		if (!this.level().isClientSide() && this.level() instanceof ServerLevel serverLevel) {
 			if (Math.floorMod(this.tickCount + this.anchor.hashCode(), MAINTENANCE_INTERVAL_TICKS) == 0) {
 				this.refreshPowered(serverLevel);
-				this.straightenParallelTrackRails(serverLevel);
 			}
-			this.guideNearbyMinecarts(serverLevel);
+			TrackGuidanceScheduler.queue(serverLevel, this);
 		}
+	}
+
+	void guideAfterEntityTicks(final ServerLevel level) {
+		this.guideNearbyMinecarts(level);
 	}
 
 	@Override
@@ -147,68 +157,335 @@ public class ParallelSidingSwitchEntity extends Entity {
 	}
 
 	private void guideNearbyMinecarts(final ServerLevel level) {
-		AABB area = ParallelSidingSwitchPlacementHelper.placementBounds(this.placement()).inflate(1.25, 0.75, 1.25);
-		Set<UUID> seenCarts = new HashSet<>();
-		for (AbstractMinecart minecart : level.getEntities(EntityTypeTest.forClass(AbstractMinecart.class), area, cart -> !cart.isRemoved())) {
-			seenCarts.add(minecart.getUUID());
-			if (!this.isInsideOwnedLanes(minecart.position())) {
-				this.activeCarts.remove(minecart.getUUID());
-				this.releasedCarts.remove(minecart.getUUID());
-				continue;
+		long gameTime = level.getGameTime();
+		this.seenCarts.clear();
+		List<AbstractMinecart> nearby = new ArrayList<>();
+		for (AbstractMinecart minecart : level.getEntities(EntityTypeTest.forClass(AbstractMinecart.class), this.cartGuideArea, cart -> !cart.isRemoved())) {
+			nearby.add(minecart);
+			this.seenCarts.add(minecart.getUUID());
+			for (AbstractMinecart linked : GuidedConsist.linkedTo(level, minecart)) {
+				this.seenCarts.add(linked.getUUID());
 			}
-
-			ReleasedSwitchState releasedCart = this.releasedCarts.get(minecart.getUUID());
-			if (releasedCart != null) {
-				double releasedProgress = this.nearestProgress(releasedCart.route, minecart);
-				if (releasedCart.shouldIgnore(this, minecart, releasedProgress)) {
-					continue;
-				}
-				this.releasedCarts.remove(minecart.getUUID());
-			}
-
-			SwitchRideState rideState = this.activeCarts.get(minecart.getUUID());
-			if (rideState == null) {
-				ParallelSidingSwitchRoute route = this.routeForNewCart(minecart);
-				double nearestProgress = this.nearestProgress(route, minecart);
-				Vec3 nearest = this.point(route, nearestProgress);
-				if (ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.45) {
-					continue;
-				}
-				rideState = SwitchRideState.start(route, minecart, this, nearestProgress);
-				this.activeCarts.put(minecart.getUUID(), rideState);
-			}
-
-			double nearestProgress = this.nearestProgress(rideState.route, minecart);
-			Vec3 expected = this.point(rideState.route, rideState.progress);
-			Vec3 nearest = this.point(rideState.route, nearestProgress);
-			if (
-				ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), expected) > 2.25
-					&& ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.35
-			) {
-				this.activeCarts.remove(minecart.getUUID());
-				continue;
-			}
-
-			double speed = rideState.trackSpeed(minecart.getDeltaMovement().horizontalDistance());
-			double nextProgress = rideState.progress
-				+ ParallelSidingSwitchMath.progressStepForSpeed(rideState.route, speed) * rideState.direction;
-			if (nextProgress >= 1.0 || nextProgress <= 0.0) {
-				double exitProgress = rideState.direction > 0.0 ? 1.0 : 0.0;
-				Vec3 exitTangent = this.tangent(rideState.route, exitProgress).scale(rideState.direction);
-				Vec3 exitPos = this.point(rideState.route, exitProgress).add(exitTangent.scale(exitNudge(speed)));
-				applyCartPose(minecart, exitPos, exitTangent, speed);
-				this.activeCarts.remove(minecart.getUUID());
-				this.releasedCarts.put(minecart.getUUID(), new ReleasedSwitchState(rideState.route, rideState.direction));
-				continue;
-			}
-
-			rideState.progress = nextProgress;
-			Vec3 target = this.point(rideState.route, nextProgress);
-			Vec3 nextTangent = this.tangent(rideState.route, nextProgress).scale(rideState.direction);
-			applyCartPose(minecart, target, nextTangent, speed);
 		}
-		this.activeCarts.keySet().removeIf(id -> !seenCarts.contains(id));
-		this.releasedCarts.keySet().removeIf(id -> !seenCarts.contains(id));
+
+		List<AbstractMinecart> guidableLeaders = new ArrayList<>();
+		for (AbstractMinecart minecart : nearby) {
+			if (this.isFollowerOfGuidedConsist(level, minecart)) {
+				continue;
+			}
+			if (this.prepareRide(level, minecart, gameTime)) {
+				guidableLeaders.add(minecart);
+			}
+		}
+		this.activeCarts.keySet().removeIf(id -> !this.seenCarts.contains(id));
+		this.releasedCarts.keySet().removeIf(id -> !this.seenCarts.contains(id));
+		this.routeLocks.entrySet().removeIf(entry -> gameTime - entry.getValue().lastSeenGameTime > ROUTE_LOCK_RELEASE_GRACE_TICKS);
+
+		Map<UUID, SwitchRideState> followSources = new HashMap<>();
+		for (AbstractMinecart minecart : guidableLeaders) {
+			SwitchRideState before = this.activeCarts.get(minecart.getUUID());
+			double next = this.advanceIndependent(minecart);
+			SwitchRideState after = this.activeCarts.get(minecart.getUUID());
+			if (after != null) {
+				followSources.put(minecart.getUUID(), after);
+			} else if (before != null && !Double.isNaN(next)) {
+				followSources.put(minecart.getUUID(), SwitchRideState.follow(before, next, before.retainedSpeed));
+			}
+		}
+		for (AbstractMinecart minecart : guidableLeaders) {
+			SwitchRideState leaderState = followSources.get(minecart.getUUID());
+			if (leaderState == null) {
+				continue;
+			}
+			this.followConsist(level, minecart, leaderState);
+		}
+		this.guideStragglingFollowers(level, nearby, gameTime);
+	}
+
+	double guidancePriority(final ServerLevel level) {
+		if (this.cartGuideArea == null) {
+			return Double.POSITIVE_INFINITY;
+		}
+
+		double best = Double.POSITIVE_INFINITY;
+		for (AbstractMinecart minecart : level.getEntities(
+			EntityTypeTest.forClass(AbstractMinecart.class),
+			this.cartGuideArea,
+			cart -> !cart.isRemoved()
+		)) {
+			AbstractMinecart leader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+			if (leader == null || !leader.getUUID().equals(minecart.getUUID())) {
+				continue;
+			}
+			double priority = this.routePriority(minecart);
+			if (priority < best) {
+				best = priority;
+			}
+		}
+		return best;
+	}
+
+	private double routePriority(final AbstractMinecart minecart) {
+		double best = Double.POSITIVE_INFINITY;
+		for (ParallelSidingSwitchRoute route : ParallelSidingSwitchRoute.values()) {
+			double progress = this.nearestProgressExtended(route, minecart);
+			if (progress < -0.1D || progress > 1.1D) {
+				continue;
+			}
+			double distance = ParallelSidingSwitchMath.horizontalDistanceSqr(
+				minecart.position(),
+				this.pointExtended(route, progress)
+			);
+			if (distance < best) {
+				best = distance;
+			}
+		}
+		return best;
+	}
+
+	private boolean isFollowerOfGuidedConsist(final ServerLevel level, final AbstractMinecart minecart) {
+		AbstractMinecart leader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+		return leader != null && !leader.getUUID().equals(minecart.getUUID());
+	}
+
+	private boolean prepareRide(final ServerLevel level, final AbstractMinecart minecart, final long gameTime) {
+		if (this.isFollowerOfGuidedConsist(level, minecart) || GuidedThisTick.contains(minecart)) {
+			return false;
+		}
+
+		AbstractMinecart consistLeader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+		if (
+			consistLeader != null
+				&& !consistLeader.getUUID().equals(minecart.getUUID())
+				&& GuidedThisTick.contains(consistLeader)
+		) {
+			return false;
+		}
+
+		if (!this.isInsideOwnedLanes(minecart.position())) {
+			this.activeCarts.remove(minecart.getUUID());
+			this.releasedCarts.remove(minecart.getUUID());
+			return false;
+		}
+
+		ReleasedSwitchState releasedCart = this.releasedCarts.get(minecart.getUUID());
+		if (releasedCart != null) {
+			this.touchRouteLock(releasedCart.trainKey, releasedCart.route, releasedCart.direction, gameTime);
+			double releasedProgress = this.nearestProgress(releasedCart.route, minecart);
+			if (releasedCart.shouldIgnore(this, minecart, releasedProgress)) {
+				return false;
+			}
+			this.releasedCarts.remove(minecart.getUUID());
+		}
+
+		SwitchRideState rideState = this.activeCarts.get(minecart.getUUID());
+		if (rideState == null) {
+			UUID trainKey = MinecartTrainLogic.connectedTrainKey(level, minecart);
+			ParallelSidingSwitchRoute route = this.lockedRouteForNewCart(minecart, trainKey, gameTime);
+			double extendedProgress = this.nearestProgressExtended(route, minecart);
+			if (extendedProgress < CAPTURE_MIN_PROGRESS || extendedProgress > CAPTURE_MAX_PROGRESS) {
+				return false;
+			}
+			Vec3 nearest = this.pointExtended(route, extendedProgress);
+			if (ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.45) {
+				return false;
+			}
+			rideState = SwitchRideState.start(route, trainKey, minecart, this, extendedProgress);
+			this.activeCarts.put(minecart.getUUID(), rideState);
+		}
+		this.touchRouteLock(rideState.trainKey, rideState.route, rideState.direction, gameTime);
+
+		double nearestProgress = this.nearestProgress(rideState.route, minecart);
+		Vec3 expected = this.pointExtended(rideState.route, rideState.progress);
+		Vec3 nearest = this.point(rideState.route, nearestProgress);
+		if (
+			ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), expected) > 2.25
+				&& ParallelSidingSwitchMath.horizontalDistanceSqr(minecart.position(), nearest) > 1.35
+		) {
+			this.activeCarts.remove(minecart.getUUID());
+			return false;
+		}
+		return true;
+	}
+
+	private double advanceIndependent(final AbstractMinecart minecart) {
+		SwitchRideState rideState = this.activeCarts.get(minecart.getUUID());
+		if (rideState == null) {
+			return Double.NaN;
+		}
+
+		double speed = rideState.trackSpeed(minecart.getDeltaMovement().horizontalDistance());
+		double progressStep = ParallelSidingSwitchMath.progressStepForSpeed(rideState.route, speed);
+		double next = rideState.progress + progressStep * rideState.direction;
+		this.moveToProgress(minecart, rideState, next, speed, rideState);
+		return next;
+	}
+
+	private void followConsist(
+		final ServerLevel level,
+		final AbstractMinecart leader,
+		final SwitchRideState leaderState
+	) {
+		Map<UUID, Integer> hops = GuidedConsist.hopsFrom(level, leader);
+		AbstractMinecart consistLeader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, leader));
+		for (AbstractMinecart linked : GuidedConsist.linkedTo(level, leader)) {
+			if (linked.getUUID().equals(leader.getUUID())) {
+				continue;
+			}
+			if (consistLeader != null && consistLeader.getUUID().equals(linked.getUUID())) {
+				continue;
+			}
+			this.followLeader(linked, leader, leaderState, Math.max(1, hops.getOrDefault(linked.getUUID(), 1)));
+		}
+	}
+
+	private void guideStragglingFollowers(
+		final ServerLevel level,
+		final List<AbstractMinecart> nearby,
+		final long gameTime
+	) {
+		Set<UUID> handledLeaders = new HashSet<>();
+		for (AbstractMinecart minecart : nearby) {
+			if (GuidedThisTick.contains(minecart) || !this.isInsideOwnedLanes(minecart.position())) {
+				continue;
+			}
+
+			AbstractMinecart leader = GuidedConsist.leader(level, GuidedConsist.linkedTo(level, minecart));
+			if (leader == null || leader.getUUID().equals(minecart.getUUID()) || !handledLeaders.add(leader.getUUID())) {
+				continue;
+			}
+			if (this.activeCarts.containsKey(leader.getUUID()) || GuidedThisTick.contains(leader)) {
+				continue;
+			}
+
+			UUID trainKey = MinecartTrainLogic.connectedTrainKey(level, leader);
+			ParallelSidingSwitchRoute route = this.routeForStraggler(minecart, trainKey, gameTime);
+			double leaderProgress = this.nearestProgressExtended(route, leader);
+			if (leaderProgress < STRAGGLER_MIN_PROGRESS || leaderProgress > STRAGGLER_MAX_PROGRESS) {
+				continue;
+			}
+			if (ParallelSidingSwitchMath.horizontalDistanceSqr(leader.position(), this.pointExtended(route, leaderProgress)) > 2.25) {
+				continue;
+			}
+
+			SwitchRideState leaderState = SwitchRideState.start(route, trainKey, leader, this, leaderProgress);
+			this.touchRouteLock(trainKey, route, leaderState.direction, gameTime);
+			this.followConsist(level, leader, leaderState);
+		}
+	}
+
+	private ParallelSidingSwitchRoute routeForStraggler(
+		final AbstractMinecart follower,
+		final UUID trainKey,
+		final long gameTime
+	) {
+		SwitchRideState existing = this.activeCarts.get(follower.getUUID());
+		if (existing != null) {
+			return existing.route;
+		}
+		SwitchRouteLock routeLock = this.routeLocks.get(trainKey);
+		if (routeLock != null && gameTime - routeLock.lastSeenGameTime <= ROUTE_LOCK_RELEASE_GRACE_TICKS) {
+			return routeLock.route;
+		}
+		return this.routeForNewCart(follower);
+	}
+
+	private void followLeader(
+		final AbstractMinecart minecart,
+		final AbstractMinecart leader,
+		final SwitchRideState leaderState,
+		final int hops
+	) {
+		if (GuidedThisTick.contains(minecart)) {
+			return;
+		}
+		double routeLength = ParallelSidingSwitchMath.routeLength(leaderState.route);
+		double next = GuidedConsist.followProgress(leaderState.progress, leaderState.direction, hops, routeLength);
+		double minSeparation = MinecartTrainLogic.couplingDistance() * 0.85D;
+		for (int i = 0; i < 8; i++) {
+			if (ParallelSidingSwitchMath.horizontalDistanceSqr(
+				this.pointExtended(leaderState.route, next),
+				leader.position()
+			) >= minSeparation * minSeparation) {
+				break;
+			}
+			next -= leaderState.direction * 0.08D;
+		}
+
+		double speed = Math.max(SwitchRideState.MIN_GUIDED_SPEED, leaderState.retainedSpeed);
+		SwitchRideState followState = SwitchRideState.follow(leaderState, next, speed);
+		this.activeCarts.put(minecart.getUUID(), followState);
+		this.seenCarts.add(minecart.getUUID());
+		this.moveToProgress(minecart, followState, next, speed, leaderState);
+	}
+
+	private void moveToProgress(
+		final AbstractMinecart minecart,
+		final SwitchRideState rideState,
+		final double nextProgress,
+		final double speed,
+		final SwitchRideState yawSource
+	) {
+		boolean pastForwardExit = yawSource.direction > 0.0D && nextProgress >= 1.0D;
+		boolean pastReverseExit = yawSource.direction < 0.0D && nextProgress <= 0.0D;
+		if (pastForwardExit || pastReverseExit) {
+			double exitProgress = pastForwardExit ? 1.0 : 0.0;
+			Vec3 exitTangent = this.tangent(yawSource.route, exitProgress).scale(yawSource.direction);
+			Vec3 exitPos = this.handoffPosition(this.point(yawSource.route, exitProgress), exitTangent);
+			this.applyCartPose(minecart, exitPos, exitTangent.scale(speed), yawSource);
+			this.activeCarts.remove(minecart.getUUID());
+			this.releasedCarts.put(
+				minecart.getUUID(),
+				new ReleasedSwitchState(yawSource.route, yawSource.direction, rideState.trainKey)
+			);
+			return;
+		}
+
+		rideState.progress = nextProgress;
+		Vec3 target = this.pointExtended(yawSource.route, nextProgress);
+		Vec3 nextTangent = this.tangentExtended(yawSource.route, nextProgress).scale(yawSource.direction);
+		double followingProgress = nextProgress
+			+ ParallelSidingSwitchMath.progressStepForSpeed(yawSource.route, speed) * yawSource.direction;
+		Vec3 followingTarget = this.pointExtended(yawSource.route, followingProgress);
+		Vec3 pathMovement = alignedPathMovement(
+			followingTarget.subtract(target).horizontal(),
+			nextTangent,
+			Math.max(SwitchRideState.MIN_GUIDED_SPEED, speed)
+		);
+		this.applyCartPose(minecart, target, pathMovement, yawSource);
+	}
+
+	private ParallelSidingSwitchRoute lockedRouteForNewCart(
+		final AbstractMinecart minecart,
+		final UUID trainKey,
+		final long gameTime
+	) {
+		SwitchRouteLock routeLock = this.routeLocks.get(trainKey);
+		if (routeLock != null && gameTime - routeLock.lastSeenGameTime <= ROUTE_LOCK_RELEASE_GRACE_TICKS) {
+			routeLock.lastSeenGameTime = gameTime;
+			return routeLock.route;
+		}
+
+		ParallelSidingSwitchRoute route = this.routeForNewCart(minecart);
+		this.routeLocks.put(trainKey, new SwitchRouteLock(route, 0.0D, gameTime));
+		return route;
+	}
+
+	private void touchRouteLock(
+		final UUID trainKey,
+		final ParallelSidingSwitchRoute route,
+		final double direction,
+		final long gameTime
+	) {
+		SwitchRouteLock routeLock = this.routeLocks.get(trainKey);
+		if (routeLock == null || routeLock.route != route) {
+			this.routeLocks.put(trainKey, new SwitchRouteLock(route, direction, gameTime));
+			return;
+		}
+		if (direction != 0.0D) {
+			routeLock.direction = direction;
+		}
+		routeLock.lastSeenGameTime = gameTime;
 	}
 
 	private ParallelSidingSwitchRoute routeForNewCart(final AbstractMinecart minecart) {
@@ -234,37 +511,6 @@ public class ParallelSidingSwitchEntity extends Entity {
 		return sideOffset >= -0.45 && sideOffset <= 1.45;
 	}
 
-	private void straightenParallelTrackRails(final ServerLevel level) {
-		Direction facing = this.facing();
-		Direction side = this.variant().sideDirection(facing);
-		RailShape straightShape = facing.getAxis() == Direction.Axis.X ? RailShape.EAST_WEST : RailShape.NORTH_SOUTH;
-
-		for (int lane = 0; lane <= 1; lane++) {
-			BlockPos laneAnchor = this.anchor.relative(side, lane);
-			for (int forward = -3; forward <= 4; forward++) {
-				this.straightenRailAt(level, laneAnchor.relative(facing, forward), straightShape);
-			}
-		}
-	}
-
-	private void straightenRailAt(final ServerLevel level, final BlockPos pos, final RailShape straightShape) {
-		BlockState state = level.getBlockState(pos);
-		if (!(state.getBlock() instanceof BaseRailBlock railBlock)) {
-			return;
-		}
-
-		Property<RailShape> shapeProperty = railBlock.getShapeProperty();
-		if (!state.hasProperty(shapeProperty) || !shapeProperty.getPossibleValues().contains(straightShape)) {
-			return;
-		}
-
-		BlockState straightState = state.setValue(shapeProperty, straightShape);
-		if (straightState != state) {
-			// Vanilla rail placement recalculates shapes from neighbors; the switch owns this local corridor and keeps both lanes parallel.
-			level.setBlock(pos, straightState, Block.UPDATE_CLIENTS);
-		}
-	}
-
 	private Vec3 point(final ParallelSidingSwitchRoute route, final double progress) {
 		return ParallelSidingSwitchMath.point(this.anchor, this.facing(), this.variant(), route, progress);
 	}
@@ -273,64 +519,116 @@ public class ParallelSidingSwitchEntity extends Entity {
 		return ParallelSidingSwitchMath.tangent(this.anchor, this.facing(), this.variant(), route, progress);
 	}
 
+	private Vec3 pointExtended(final ParallelSidingSwitchRoute route, final double progress) {
+		return ParallelSidingSwitchMath.pointExtended(this.anchor, this.facing(), this.variant(), route, progress);
+	}
+
+	private Vec3 tangentExtended(final ParallelSidingSwitchRoute route, final double progress) {
+		return ParallelSidingSwitchMath.tangentExtended(this.anchor, this.facing(), this.variant(), route, progress);
+	}
+
 	private double nearestProgress(final ParallelSidingSwitchRoute route, final AbstractMinecart minecart) {
 		return ParallelSidingSwitchMath.nearestProgress(this.anchor, this.facing(), this.variant(), route, minecart.position());
+	}
+
+	private double nearestProgressExtended(final ParallelSidingSwitchRoute route, final AbstractMinecart minecart) {
+		return ParallelSidingSwitchMath.nearestProgressExtended(
+			this.anchor, this.facing(), this.variant(), route, minecart.position()
+		);
 	}
 
 	private ParallelSidingSwitchPlacementHelper.Placement placement() {
 		return new ParallelSidingSwitchPlacementHelper.Placement(this.anchor, this.facing(), this.variant());
 	}
 
-	private static void applyCartPose(final AbstractMinecart minecart, final Vec3 position, final Vec3 tangent, final double speed) {
-		minecart.setPos(position.x, position.y, position.z);
-		minecart.setDeltaMovement(tangent.scale(Math.max(SwitchRideState.MIN_GUIDED_SPEED, speed)));
-		minecart.setYRot(smoothedCartYaw(minecart.getYRot(), tangent));
-		minecart.setXRot(0.0F);
+	private void applyCartPose(
+		final AbstractMinecart minecart,
+		final Vec3 position,
+		final Vec3 pathMovement,
+		final SwitchRideState rideState
+	) {
+		float yaw = GuidedMinecartPose.yawFollowingHeading(
+			rideState.entryYaw, rideState.entryTravel, pathMovement
+		);
+		GuidedMinecartPose.apply(
+			minecart,
+			position,
+			pathMovement,
+			GuidedMinecartPose.flippedMatchingYaw(yaw, pathMovement, rideState.flippedPose),
+			yaw
+		);
+		GuidedThisTick.mark(minecart);
 	}
 
-	private static float smoothedCartYaw(final float currentYaw, final Vec3 tangent) {
-		float targetYaw = closestCartYaw(currentYaw, tangent);
-		float delta = Mth.wrapDegrees(targetYaw - currentYaw);
-		return Mth.wrapDegrees(currentYaw + Mth.clamp(delta, -MAX_CART_YAW_STEP, MAX_CART_YAW_STEP));
+	private static Vec3 alignedPathMovement(final Vec3 pathMovement, final Vec3 travelTangent, final double speed) {
+		if (pathMovement.lengthSqr() <= 1.0E-8D) {
+			return travelTangent.scale(speed);
+		}
+		return pathMovement.dot(travelTangent) < 0.0D ? pathMovement.reverse() : pathMovement;
 	}
 
-	private static float closestCartYaw(final float currentYaw, final Vec3 tangent) {
-		float forwardYaw = tangentYaw(tangent);
-		float reversedYaw = Mth.wrapDegrees(forwardYaw + 180.0F);
-		float forwardDelta = Math.abs(Mth.wrapDegrees(forwardYaw - currentYaw));
-		float reversedDelta = Math.abs(Mth.wrapDegrees(reversedYaw - currentYaw));
-		return forwardDelta <= reversedDelta ? forwardYaw : reversedYaw;
-	}
+	private Vec3 handoffPosition(final Vec3 exitPos, final Vec3 exitTangent) {
+		Vec3 direction = exitTangent.horizontal();
+		if (direction.lengthSqr() <= 1.0E-8D) {
+			return exitPos;
+		}
 
-	private static float tangentYaw(final Vec3 tangent) {
-		return Mth.wrapDegrees((float)(Mth.atan2(tangent.z, tangent.x) * 180.0F / Math.PI) - 90.0F);
-	}
-
-	private static double exitNudge(final double speed) {
-		return Mth.clamp(speed * 0.35, 0.08, 0.2);
+		Vec3 unit = direction.normalize();
+		Vec3 candidate = exitPos.add(unit.scale(0.55D));
+		BlockPos railPos = BlockPos.containing(candidate.x, this.anchor.getY(), candidate.z);
+		if (this.level() instanceof ServerLevel serverLevel && GuidedTrack.isPresent(serverLevel, railPos)) {
+			return new Vec3(railPos.getX() + 0.5D, this.anchor.getY() + 0.08D, railPos.getZ() + 0.5D);
+		}
+		return candidate;
 	}
 
 	private static final class SwitchRideState {
 		private static final double MIN_GUIDED_SPEED = 0.12;
 		private final ParallelSidingSwitchRoute route;
+		private final UUID trainKey;
 		private double progress;
 		private final double direction;
+		private final boolean flippedPose;
+		private final float entryYaw;
+		private final Vec3 entryTravel;
 		private double retainedSpeed;
 
 		private SwitchRideState(
 			final ParallelSidingSwitchRoute route,
+			final UUID trainKey,
 			final double progress,
 			final double direction,
-			final double entrySpeed
+			final boolean flippedPose,
+			final double entrySpeed,
+			final float entryYaw,
+			final Vec3 entryTravel
 		) {
 			this.route = route;
+			this.trainKey = trainKey;
 			this.progress = progress;
 			this.direction = direction;
+			this.flippedPose = flippedPose;
 			this.retainedSpeed = Math.max(MIN_GUIDED_SPEED, entrySpeed);
+			this.entryYaw = entryYaw;
+			this.entryTravel = entryTravel;
+		}
+
+		private static SwitchRideState follow(final SwitchRideState leader, final double progress, final double speed) {
+			return new SwitchRideState(
+				leader.route,
+				leader.trainKey,
+				progress,
+				leader.direction,
+				leader.flippedPose,
+				speed,
+				leader.entryYaw,
+				leader.entryTravel
+			);
 		}
 
 		private static SwitchRideState start(
 			final ParallelSidingSwitchRoute route,
+			final UUID trainKey,
 			final AbstractMinecart minecart,
 			final ParallelSidingSwitchEntity entity,
 			final double progress
@@ -338,8 +636,26 @@ public class ParallelSidingSwitchEntity extends Entity {
 			Vec3 tangent = entity.tangent(route, progress);
 			double entrySpeed = minecart.getDeltaMovement().horizontalDistance();
 			double dot = minecart.getDeltaMovement().dot(tangent);
-			double direction = Math.abs(dot) > 0.02 ? Math.signum(dot) : (progress > 0.5 ? -1.0 : 1.0);
-			return new SwitchRideState(route, progress, direction, entrySpeed);
+			double direction = 1.0D;
+			if (Math.abs(dot) > 0.02) {
+				direction = Math.signum(dot);
+			} else {
+				SwitchRouteLock routeLock = entity.routeLocks.get(trainKey);
+				if (routeLock != null && routeLock.direction != 0.0D) {
+					direction = routeLock.direction;
+				}
+			}
+			Vec3 travelTangent = tangent.scale(direction);
+			return new SwitchRideState(
+				route,
+				trainKey,
+				progress,
+				direction,
+				minecart.isFlipped(),
+				entrySpeed,
+				minecart.getYRot(),
+				travelTangent
+			);
 		}
 
 		private double trackSpeed(final double currentSpeed) {
@@ -348,13 +664,31 @@ public class ParallelSidingSwitchEntity extends Entity {
 		}
 	}
 
+	private static final class SwitchRouteLock {
+		private final ParallelSidingSwitchRoute route;
+		private double direction;
+		private long lastSeenGameTime;
+
+		private SwitchRouteLock(final ParallelSidingSwitchRoute route, final double direction, final long lastSeenGameTime) {
+			this.route = route;
+			this.direction = direction;
+			this.lastSeenGameTime = lastSeenGameTime;
+		}
+	}
+
 	private static final class ReleasedSwitchState {
 		private final ParallelSidingSwitchRoute route;
 		private final double direction;
+		private final UUID trainKey;
 
-		private ReleasedSwitchState(final ParallelSidingSwitchRoute route, final double direction) {
+		private ReleasedSwitchState(
+			final ParallelSidingSwitchRoute route,
+			final double direction,
+			final UUID trainKey
+		) {
 			this.route = route;
 			this.direction = direction;
+			this.trainKey = trainKey;
 		}
 
 		private boolean shouldIgnore(
@@ -362,6 +696,10 @@ public class ParallelSidingSwitchEntity extends Entity {
 			final AbstractMinecart minecart,
 			final double progress
 		) {
+			if (!GuidedTrack.isPresent(minecart.level(), minecart.blockPosition())) {
+				return false;
+			}
+
 			double exitProgress = this.direction > 0.0 ? 1.0 : 0.0;
 			boolean stillAtExit = this.direction > 0.0 ? progress > 0.72 : progress < 0.28;
 			if (!stillAtExit) {
