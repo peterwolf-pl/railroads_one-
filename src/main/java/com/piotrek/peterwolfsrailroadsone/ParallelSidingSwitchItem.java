@@ -41,7 +41,7 @@ public class ParallelSidingSwitchItem extends Item {
 		}
 
 		boolean powered = ParallelSidingSwitchPlacementHelper.isPowered(level, placement);
-		ParallelSidingSwitchEntity entity = new ParallelSidingSwitchEntity(ModEntities.PARALLEL_SIDING_SWITCH, level);
+		ParallelSidingSwitchEntity entity = new ParallelSidingSwitchEntity(ModEntities.PARALLEL_SIDING_SWITCH.get(), level);
 		entity.configure(placement.anchor(), placement.facing(), placement.variant(), powered);
 		ParallelSidingSwitchPlacementHelper.reserve(level, placement);
 		level.addFreshEntity(entity);

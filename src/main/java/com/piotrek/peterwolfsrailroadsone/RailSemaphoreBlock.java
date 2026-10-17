@@ -42,7 +42,7 @@ public final class RailSemaphoreBlock extends Block {
 	public static final BooleanProperty OCCUPIED = BlockStateProperties.LIT;
 	private static final int UPDATE_INTERVAL_TICKS = 5;
 	private static final int SEMAPHORE_EXPIRY_TICKS = 40;
-	private static final int TOPOLOGY_CACHE_TICKS = 100;
+	private static final int TOPOLOGY_CACHE_TICKS = 400;
 	private static final int MAX_SEMAPHORE_DISTANCE = 128;
 	private static final int MAX_SECTION_TRACK_BLOCKS = 192;
 	private static final int APPROACH_TRACK_BLOCKS = 7;
@@ -136,11 +136,15 @@ public final class RailSemaphoreBlock extends Block {
 		return controller(level).getSectionTrackBlocks(id);
 	}
 
+	public static void rememberPersistedAutomaticBrake(final ServerLevel level, final MinecartFurnace locomotive) {
+		controller(level).rememberPersistedAutomaticBrake(level, locomotive);
+	}
+
 	private static void setOccupied(final ServerLevel level, final BlockPos pos, final boolean occupied) {
 		BlockState state = level.getBlockState(pos);
 		if (state.is(ModBlocks.RAIL_SEMAPHORE) && state.getValue(OCCUPIED) != occupied) {
 			level.setBlock(pos, state.setValue(OCCUPIED, occupied), Block.UPDATE_ALL);
-			level.updateNeighbourForOutputSignal(pos, ModBlocks.RAIL_SEMAPHORE);
+			level.updateNeighbourForOutputSignal(pos, ModBlocks.RAIL_SEMAPHORE.get());
 		}
 	}
 
@@ -155,7 +159,7 @@ public final class RailSemaphoreBlock extends Block {
 
 	private static void schedule(final Level level, final BlockPos pos) {
 		if (!level.isClientSide()) {
-			level.scheduleTick(pos, ModBlocks.RAIL_SEMAPHORE, UPDATE_INTERVAL_TICKS);
+			level.scheduleTick(pos, ModBlocks.RAIL_SEMAPHORE.get(), UPDATE_INTERVAL_TICKS);
 		}
 	}
 
@@ -165,6 +169,7 @@ public final class RailSemaphoreBlock extends Block {
 		private final Map<UUID, UUID> reservations = new HashMap<>();
 		private final Map<RequestKey, Long> waitingSince = new HashMap<>();
 		private final Set<UUID> automaticBrakes = new HashSet<>();
+		private final Map<UUID, Long> orphanedBrakeSeenAt = new HashMap<>();
 		private List<Section> sections = List.of();
 		private Map<UUID, Set<UUID>> conflicts = Map.of();
 		private long lastUpdateTick = Long.MIN_VALUE;
@@ -281,10 +286,10 @@ public final class RailSemaphoreBlock extends Block {
 		}
 
 		private void evaluate(final ServerLevel level, final long gameTime) {
-			Map<UUID, UUID> trainIds = new HashMap<>();
+			TrainIndex trains = new TrainIndex();
 			Map<UUID, SectionSnapshot> snapshots = new HashMap<>();
 			for (Section section : this.sections) {
-				SectionSnapshot snapshot = this.scanSection(level, section, trainIds);
+				SectionSnapshot snapshot = this.scanSection(level, section, trains);
 				snapshots.put(section.id(), snapshot);
 			}
 
@@ -304,12 +309,9 @@ public final class RailSemaphoreBlock extends Block {
 
 			Set<UUID> waitingTrains = new HashSet<>();
 			requests.keySet().forEach(request -> waitingTrains.add(request.trainId()));
-			Set<UUID> presentTrains = new HashSet<>(occupyingTrains);
-			presentTrains.addAll(waitingTrains);
-
 			Map<UUID, Set<UUID>> sectionsToKeepCache = new HashMap<>();
 			this.reservations.entrySet().removeIf(
-				entry -> !reservationRemainsValid(level, entry, snapshots, presentTrains, waitingTrains, sectionsToKeepCache)
+				entry -> !reservationRemainsValid(entry, snapshots, waitingTrains, sectionsToKeepCache, trains)
 			);
 			this.adoptUnreservedOccupants(snapshots, waitingTrains);
 			this.enforceExclusiveReservations(snapshots);
@@ -384,13 +386,13 @@ public final class RailSemaphoreBlock extends Block {
 
 			Set<BlockPos> rearSignals = new HashSet<>();
 			for (UUID trainId : occupyingTrains) {
-				this.collectRearSignals(level, trainId, snapshots, rearSignals);
+				this.collectRearSignals(trainId, snapshots, rearSignals, trains);
 			}
 
 			redApproachSignals.removeAll(greenApproachSignals);
 			redApproachSignals.addAll(occupiedSignals);
 			redApproachSignals.addAll(rearSignals);
-			this.applyAutomaticBrakes(level, desiredBrakes);
+			this.applyAutomaticBrakes(level, desiredBrakes, trains);
 			for (BlockPos semaphore : this.knownSemaphores.keySet()) {
 				setOccupied(level, semaphore, redApproachSignals.contains(semaphore));
 			}
@@ -399,7 +401,7 @@ public final class RailSemaphoreBlock extends Block {
 		private SectionSnapshot scanSection(
 			final ServerLevel level,
 			final Section section,
-			final Map<UUID, UUID> trainIds
+			final TrainIndex trains
 		) {
 			List<AbstractMinecart> carts = level.getEntitiesOfClass(AbstractMinecart.class, section.searchBox());
 			Set<UUID> occupyingTrains = new HashSet<>();
@@ -408,7 +410,7 @@ public final class RailSemaphoreBlock extends Block {
 			Set<BlockPos> sectionTrack = section.path().trackBlocks();
 
 			for (AbstractMinecart cart : carts) {
-				UUID trainId = trainId(level, cart, trainIds);
+				UUID trainId = trains.trainId(level, cart);
 				if (RailSectionPathfinder.containsCart(sectionTrack, cart)
 					&& RailSectionPathfinder.pathIndexForCart(List.of(path.getFirst(), path.getLast()), cart) < 0) {
 					occupyingTrains.add(trainId);
@@ -418,16 +420,17 @@ public final class RailSemaphoreBlock extends Block {
 					continue;
 				}
 				MinecartChainAccess controls = (MinecartChainAccess) locomotive;
+				boolean semaphoreBraked = ((SemaphoreBrakeAccess) locomotive).peterwolfsRailroadsOne$isSemaphoreBraked();
 				if (!controls.minecartChain$hasEngineLever()
-					|| controls.minecartChain$isEngineActive() && !this.automaticBrakes.contains(locomotive.getUUID())) {
+					|| controls.minecartChain$isEngineActive() && !semaphoreBraked) {
 					continue;
 				}
 
 				BlockPos locomotiveTrack = RailSectionPathfinder.trackPositionForCart(level, locomotive);
 				boolean approachingFirst = section.firstApproach().contains(locomotiveTrack)
-					&& movesToward(locomotive, path.getFirst());
+					&& (semaphoreBraked || movesToward(locomotive, path.getFirst()));
 				boolean approachingSecond = section.secondApproach().contains(locomotiveTrack)
-					&& movesToward(locomotive, path.getLast());
+					&& (semaphoreBraked || movesToward(locomotive, path.getLast()));
 				if (!approachingFirst && !approachingSecond) {
 					continue;
 				}
@@ -444,14 +447,6 @@ public final class RailSemaphoreBlock extends Block {
 				approaches.putIfAbsent(trainId, new Approach(trainId, locomotive, signalPos));
 			}
 			return new SectionSnapshot(section, Set.copyOf(occupyingTrains), Map.copyOf(approaches));
-		}
-
-		private static Optional<MinecartFurnace> trainLocomotive(final ServerLevel level, final AbstractMinecart cart) {
-			return connectedTrain(level, cart).stream()
-				.filter(MinecartFurnace.class::isInstance)
-				.map(MinecartFurnace.class::cast)
-				.filter(furnace -> ((MinecartChainAccess) furnace).minecartChain$hasEngineLever())
-				.min(Comparator.comparing(Entity::getUUID));
 		}
 
 		private static BlockPos rearSignal(final Section section, final MinecartFurnace locomotive) {
@@ -480,7 +475,11 @@ public final class RailSemaphoreBlock extends Block {
 				.orElse(null);
 		}
 
-		private Set<UUID> sectionsToKeep(final ServerLevel level, final UUID trainId, final Map<UUID, SectionSnapshot> snapshots) {
+		private Set<UUID> sectionsToKeep(
+			final UUID trainId,
+			final Map<UUID, SectionSnapshot> snapshots,
+			final TrainIndex trains
+		) {
 			Set<UUID> keep = new HashSet<>();
 			List<SectionSnapshot> occupiedSnapshots = snapshots.values().stream()
 				.filter(snapshot -> snapshot.occupyingTrains().contains(trainId))
@@ -494,13 +493,8 @@ public final class RailSemaphoreBlock extends Block {
 				Section section = snapshot.section();
 				keep.add(section.id());
 
-				Optional<MinecartFurnace> locomotiveOpt = level.getEntitiesOfClass(MinecartFurnace.class, section.searchBox()).stream()
-					.filter(loco -> ((MinecartChainAccess) loco).minecartChain$hasEngineLever())
-					.filter(loco -> trainId.equals(trainLocomotive(level, loco).map(AbstractMinecart::getUUID).orElse(null)))
-					.findFirst();
-
-				if (locomotiveOpt.isPresent()) {
-					MinecartFurnace locomotive = locomotiveOpt.get();
+				MinecartFurnace locomotive = trains.locomotive(trainId, section.searchBox());
+				if (locomotive != null) {
 					
 					// Trace behind (up to 2 sections)
 					BlockPos rear1 = rearSignal(section, locomotive);
@@ -525,20 +519,20 @@ public final class RailSemaphoreBlock extends Block {
 			return keep;
 		}
 
-		private void collectRearSignals(final ServerLevel level, final UUID trainId, final Map<UUID, SectionSnapshot> snapshots, final Set<BlockPos> redSignals) {
+		private void collectRearSignals(
+			final UUID trainId,
+			final Map<UUID, SectionSnapshot> snapshots,
+			final Set<BlockPos> redSignals,
+			final TrainIndex trains
+		) {
 			List<SectionSnapshot> occupiedSnapshots = snapshots.values().stream()
 				.filter(snapshot -> snapshot.occupyingTrains().contains(trainId))
 				.toList();
 
 			for (SectionSnapshot snapshot : occupiedSnapshots) {
 				Section section = snapshot.section();
-				Optional<MinecartFurnace> locomotiveOpt = level.getEntitiesOfClass(MinecartFurnace.class, section.searchBox()).stream()
-					.filter(loco -> ((MinecartChainAccess) loco).minecartChain$hasEngineLever())
-					.filter(loco -> trainId.equals(trainLocomotive(level, loco).map(AbstractMinecart::getUUID).orElse(null)))
-					.findFirst();
-
-				if (locomotiveOpt.isPresent()) {
-					MinecartFurnace locomotive = locomotiveOpt.get();
+				MinecartFurnace locomotive = trains.locomotive(trainId, section.searchBox());
+				if (locomotive != null) {
 					
 					// First signal behind
 					BlockPos rear1 = rearSignal(section, locomotive);
@@ -552,27 +546,6 @@ public final class RailSemaphoreBlock extends Block {
 					}
 				}
 			}
-		}
-
-		private static UUID trainId(
-			final ServerLevel level,
-			final AbstractMinecart cart,
-			final Map<UUID, UUID> trainIds
-		) {
-			UUID cached = trainIds.get(cart.getUUID());
-			if (cached != null) {
-				return cached;
-			}
-
-			List<AbstractMinecart> train = connectedTrain(level, cart);
-			UUID representative = trainLocomotive(level, cart)
-				.map(AbstractMinecart::getUUID)
-				.orElse(cart.getUUID());
-
-			for (AbstractMinecart trainCart : train) {
-				trainIds.put(trainCart.getUUID(), representative);
-			}
-			return representative;
 		}
 
 		private static List<AbstractMinecart> connectedTrain(final ServerLevel level, final AbstractMinecart start) {
@@ -606,22 +579,61 @@ public final class RailSemaphoreBlock extends Block {
 			});
 		}
 
+		private static final class TrainIndex {
+			private final Map<UUID, UUID> trainIds = new HashMap<>();
+			private final Map<UUID, List<MinecartFurnace>> trainLocomotives = new HashMap<>();
+
+			private UUID trainId(final ServerLevel level, final AbstractMinecart cart) {
+				UUID cached = this.trainIds.get(cart.getUUID());
+				if (cached != null) {
+					return cached;
+				}
+
+				List<AbstractMinecart> train = connectedTrain(level, cart);
+				List<MinecartFurnace> locomotives = train.stream()
+					.filter(MinecartFurnace.class::isInstance)
+					.map(MinecartFurnace.class::cast)
+					.filter(furnace -> ((MinecartChainAccess) furnace).minecartChain$hasEngineLever())
+					.sorted(Comparator.comparing(Entity::getUUID))
+					.toList();
+				UUID representative = locomotives.isEmpty() ? cart.getUUID() : locomotives.getFirst().getUUID();
+
+				for (AbstractMinecart trainCart : train) {
+					this.trainIds.put(trainCart.getUUID(), representative);
+				}
+				if (!locomotives.isEmpty()) {
+					this.trainLocomotives.put(representative, List.copyOf(locomotives));
+				}
+				return representative;
+			}
+
+			private MinecartFurnace locomotive(final UUID trainId, final AABB area) {
+				for (MinecartFurnace locomotive : this.trainLocomotives.getOrDefault(trainId, List.of())) {
+					if (!locomotive.isRemoved() && area.intersects(locomotive.getBoundingBox())) {
+						return locomotive;
+					}
+				}
+				return null;
+			}
+
+			private List<MinecartFurnace> locomotives(final UUID cartOrTrainId) {
+				UUID trainId = this.trainIds.getOrDefault(cartOrTrainId, cartOrTrainId);
+				return this.trainLocomotives.getOrDefault(trainId, List.of());
+			}
+		}
+
 		private boolean reservationRemainsValid(
-			final ServerLevel level,
 			final Map.Entry<UUID, UUID> reservation,
 			final Map<UUID, SectionSnapshot> snapshots,
-			final Set<UUID> presentTrains,
 			final Set<UUID> waitingTrains,
-			final Map<UUID, Set<UUID>> sectionsToKeepCache
+			final Map<UUID, Set<UUID>> sectionsToKeepCache,
+			final TrainIndex trains
 		) {
 			SectionSnapshot snapshot = snapshots.get(reservation.getKey());
 			if (snapshot == null) {
 				return false;
 			}
 			UUID owner = reservation.getValue();
-			if (!presentTrains.contains(owner)) {
-				return false;
-			}
 			if (this.hasConflictingOccupant(reservation.getKey(), owner, snapshots, waitingTrains)) {
 				return false;
 			}
@@ -629,13 +641,11 @@ public final class RailSemaphoreBlock extends Block {
 			boolean isOccupyingAny = snapshots.values().stream()
 				.anyMatch(snap -> snap.occupyingTrains().contains(owner));
 			if (isOccupyingAny) {
-				Set<UUID> keep = sectionsToKeepCache.computeIfAbsent(owner, id -> this.sectionsToKeep(level, id, snapshots));
-				if (!keep.contains(reservation.getKey())) {
-					return false;
-				}
+				Set<UUID> keep = sectionsToKeepCache.computeIfAbsent(owner, id -> this.sectionsToKeep(id, snapshots, trains));
+				return keep.contains(reservation.getKey());
 			}
 
-			return true;
+			return snapshot.approaches().containsKey(owner);
 		}
 
 		private boolean hasOneSectionClearance(final RequestKey request) {
@@ -750,32 +760,74 @@ public final class RailSemaphoreBlock extends Block {
 			}
 		}
 
-		private void applyAutomaticBrakes(final ServerLevel level, final Set<UUID> desiredBrakes) {
+		private void rememberPersistedAutomaticBrake(final ServerLevel level, final MinecartFurnace locomotive) {
+			SemaphoreBrakeAccess brake = (SemaphoreBrakeAccess) locomotive;
+			if (!brake.peterwolfsRailroadsOne$isSemaphoreBraked()) {
+				this.orphanedBrakeSeenAt.remove(locomotive.getUUID());
+				return;
+			}
+
+			UUID locomotiveId = locomotive.getUUID();
+			this.automaticBrakes.add(locomotiveId);
+			boolean hasLoadedSemaphore = this.knownSemaphores.keySet().stream().anyMatch(pos -> isSemaphore(level, pos));
+			if (hasLoadedSemaphore) {
+				this.orphanedBrakeSeenAt.remove(locomotiveId);
+				return;
+			}
+
+			long firstSeen = this.orphanedBrakeSeenAt.computeIfAbsent(locomotiveId, ignored -> level.getGameTime());
+			if (level.getGameTime() - firstSeen >= SEMAPHORE_EXPIRY_TICKS) {
+				brake.peterwolfsRailroadsOne$setSemaphoreBraked(false);
+				MinecartChainAccess controls = (MinecartChainAccess) locomotive;
+				if (controls.minecartChain$hasEngineLever() && controls.minecartChain$isEngineActive()) {
+					controls.minecartChain$setEngineActive(false);
+				}
+				this.automaticBrakes.remove(locomotiveId);
+				this.orphanedBrakeSeenAt.remove(locomotiveId);
+			}
+		}
+
+		private void applyAutomaticBrakes(
+			final ServerLevel level,
+			final Set<UUID> desiredBrakes,
+			final TrainIndex trains
+		) {
 			Set<UUID> expandedBrakes = new HashSet<>();
 			for (UUID locomotiveId : desiredBrakes) {
+				List<MinecartFurnace> trainLocomotives = trains != null ? trains.locomotives(locomotiveId) : List.of();
+				if (!trainLocomotives.isEmpty()) {
+					trainLocomotives.forEach(locomotive -> expandedBrakes.add(locomotive.getUUID()));
+					continue;
+				}
+
 				Entity entity = level.getEntityInAnyDimension(locomotiveId);
-				if (entity instanceof AbstractMinecart cart) {
-					for (AbstractMinecart trainCart : connectedTrain(level, cart)) {
-						if (trainCart instanceof MinecartFurnace locomotive
-							&& ((MinecartChainAccess) locomotive).minecartChain$hasEngineLever()) {
-							expandedBrakes.add(locomotive.getUUID());
-						}
-					}
-				} else {
+				if (!(entity instanceof AbstractMinecart cart)) {
 					expandedBrakes.add(locomotiveId);
+					continue;
+				}
+				for (AbstractMinecart trainCart : connectedTrain(level, cart)) {
+					if (trainCart instanceof MinecartFurnace locomotive
+						&& ((MinecartChainAccess) locomotive).minecartChain$hasEngineLever()) {
+						expandedBrakes.add(locomotive.getUUID());
+					}
 				}
 			}
 
+			Set<UUID> nextAutomaticBrakes = new HashSet<>(expandedBrakes);
 			Set<UUID> released = new HashSet<>(this.automaticBrakes);
 			released.removeAll(expandedBrakes);
 			for (UUID locomotiveId : released) {
 				Entity entity = level.getEntityInAnyDimension(locomotiveId);
 				if (entity instanceof MinecartFurnace locomotive && locomotive.level() == level) {
 					MinecartChainAccess controls = (MinecartChainAccess) locomotive;
+					((SemaphoreBrakeAccess) locomotive).peterwolfsRailroadsOne$setSemaphoreBraked(false);
+					this.orphanedBrakeSeenAt.remove(locomotiveId);
 					if (controls.minecartChain$hasEngineLever() && controls.minecartChain$isEngineActive()) {
 						controls.minecartChain$setEngineActive(false);
 						level.playSound(null, locomotive.blockPosition(), SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.8F, 0.65F);
 					}
+				} else {
+					nextAutomaticBrakes.add(locomotiveId);
 				}
 			}
 
@@ -785,6 +837,8 @@ public final class RailSemaphoreBlock extends Block {
 					continue;
 				}
 				MinecartChainAccess controls = (MinecartChainAccess) locomotive;
+				((SemaphoreBrakeAccess) locomotive).peterwolfsRailroadsOne$setSemaphoreBraked(true);
+				this.orphanedBrakeSeenAt.remove(locomotiveId);
 				if (!controls.minecartChain$isEngineActive()) {
 					controls.minecartChain$setEngineActive(true);
 					level.playSound(null, locomotive.blockPosition(), SoundEvents.LEVER_CLICK, SoundSource.BLOCKS, 0.9F, 0.5F);
@@ -792,11 +846,11 @@ public final class RailSemaphoreBlock extends Block {
 				MinecartTrainLogic.applyTrainBrake(locomotive);
 			}
 			this.automaticBrakes.clear();
-			this.automaticBrakes.addAll(expandedBrakes);
+			this.automaticBrakes.addAll(nextAutomaticBrakes);
 		}
 
 		private void releaseAllAutomaticBrakes(final ServerLevel level) {
-			this.applyAutomaticBrakes(level, Set.of());
+			this.applyAutomaticBrakes(level, Set.of(), null);
 			this.reservations.clear();
 			this.waitingSince.clear();
 		}

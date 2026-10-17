@@ -1,0 +1,9 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "peterwolfs_railroads_one:block/crossing_rail"
+      }
+    }
+  ]
+}

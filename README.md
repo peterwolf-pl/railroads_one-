@@ -1,6 +1,6 @@
 # Peterwolf's RailRoad's One
 
-Peterwolf's RailRoad's One is a Fabric prototype mod that adds smooth 3x3 railroad curves for Minecraft minecarts. The goal is to replace the sharp one-block 90 degree vanilla rail turn with a wider railway curve that reads more like real track geometry.
+Peterwolf's RailRoad's One is a NeoForge prototype mod that adds smooth 3x3 railroad curves for Minecraft minecarts. The goal is to replace the sharp one-block 90 degree vanilla rail turn with a wider railway curve that reads more like real track geometry.
 
 ## Features
 
@@ -42,13 +42,13 @@ TODO: split the left and right recipes into distinct patterns once the gameplay 
 
 ## Building
 
-The Minecart Chain dependency is included in `deps/minecart-chain`, so the repository builds without a separate sibling checkout:
+This NeoForge port compiles against the sibling `minecart-chain-neoforge` JAR (`../minecart-chain-neoforge/build/libs/`). Build that project first if the JAR is missing, then:
 
 ```text
 ./gradlew build
 ```
 
-The RailRoad's One JAR is generated in `build/libs/`.
+The RailRoad's One JAR is generated in `build/libs/`. Launch with **Minecart Chain** NeoForge installed in the same mods folder.
 
 ## Prototype Status
 

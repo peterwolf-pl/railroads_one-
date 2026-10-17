@@ -42,7 +42,7 @@ public class GentleRailCurveItem extends Item {
 			return InteractionResult.FAIL;
 		}
 
-		GentleRailCurveEntity entity = new GentleRailCurveEntity(ModEntities.GENTLE_RAIL_CURVE, level);
+		GentleRailCurveEntity entity = new GentleRailCurveEntity(ModEntities.GENTLE_RAIL_CURVE.get(), level);
 		entity.configure(placement.anchor(), placement.facing(), this.turn, this.size);
 		CurvePlacementHelper.reserve(level, placement);
 		level.addFreshEntity(entity);

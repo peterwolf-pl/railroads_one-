@@ -72,7 +72,7 @@ public final class ParallelSidingSwitchPlacementHelper {
 	}
 
 	public static void refreshPowered(final ServerLevel level, final BlockPos pos) {
-		level.getEntities(ModEntities.PARALLEL_SIDING_SWITCH, new AABB(pos).inflate(2.5), entity -> entity.ownsMarker(pos))
+		level.getEntities(ModEntities.PARALLEL_SIDING_SWITCH.get(), new AABB(pos).inflate(2.5), entity -> entity.ownsMarker(pos))
 			.forEach(entity -> entity.refreshPowered(level));
 	}
 
@@ -125,7 +125,7 @@ public final class ParallelSidingSwitchPlacementHelper {
 	}
 
 	private static BlockState markerState(final Marker marker) {
-		return ModBlocks.PARALLEL_SIDING_SWITCH.defaultBlockState()
+		return ModBlocks.PARALLEL_SIDING_SWITCH.get().defaultBlockState()
 			.setValue(ParallelSidingSwitchBlock.FACING, marker.facing())
 			.setValue(ParallelSidingSwitchBlock.VARIANT, marker.variant())
 			.setValue(ParallelSidingSwitchBlock.POWERED, marker.powered())

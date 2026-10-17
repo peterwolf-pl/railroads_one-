@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "transportation",
+  "ingredients": [
+    "peterwolfs_railroads_one:straight_rail"
+  ],
+  "result": {
+    "id": "minecraft:rail",
+    "count": 1
+  }
+}

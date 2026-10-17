@@ -57,7 +57,7 @@ public class ParallelSidingSwitchBlock extends Block {
 	@Override
 	public BlockState playerWillDestroy(final Level level, final BlockPos pos, final BlockState state, final Player player) {
 		if (level instanceof ServerLevel serverLevel) {
-			serverLevel.getEntities(ModEntities.PARALLEL_SIDING_SWITCH, new AABB(pos).inflate(2.5), entity -> entity.ownsMarker(pos))
+			serverLevel.getEntities(ModEntities.PARALLEL_SIDING_SWITCH.get(), new AABB(pos).inflate(2.5), entity -> entity.ownsMarker(pos))
 				.forEach(entity -> entity.remove(Entity.RemovalReason.KILLED));
 		}
 		return super.playerWillDestroy(level, pos, state, player);

@@ -204,7 +204,7 @@ final class RailSectionPathfinder {
 		for (BlockPos pathBlock : orderedPath) {
 			BlockState state = level.getBlockState(pathBlock);
 			if (state.is(ModBlocks.RAIL_CURVE_MARKER)) {
-				level.getEntities(ModEntities.GENTLE_RAIL_CURVE, new AABB(pathBlock).inflate(4.5D), entity -> entity.ownsMarker(pathBlock))
+				level.getEntities(ModEntities.GENTLE_RAIL_CURVE.get(), new AABB(pathBlock).inflate(4.5D), entity -> entity.ownsMarker(pathBlock))
 					.forEach(entity -> expanded.addAll(CurvePlacementHelper.occupiedPositions(
 						entity.anchor(),
 						entity.facing(),
@@ -212,7 +212,7 @@ final class RailSectionPathfinder {
 						entity.size()
 					)));
 			} else if (state.is(ModBlocks.PARALLEL_SIDING_SWITCH)) {
-				level.getEntities(ModEntities.PARALLEL_SIDING_SWITCH, new AABB(pathBlock).inflate(3.5D), entity -> entity.ownsMarker(pathBlock))
+				level.getEntities(ModEntities.PARALLEL_SIDING_SWITCH.get(), new AABB(pathBlock).inflate(3.5D), entity -> entity.ownsMarker(pathBlock))
 					.forEach(entity -> expanded.addAll(ParallelSidingSwitchPlacementHelper.occupiedPositions(
 						entity.anchor(),
 						entity.facing(),
@@ -242,6 +242,9 @@ final class RailSectionPathfinder {
 	}
 
 	private static Set<Direction> exits(final BlockState state) {
+		if (state.getBlock() instanceof CrossingRailBlock) {
+			return EnumSet.of(Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST);
+		}
 		if (state.getBlock() instanceof BaseRailBlock rail) {
 			RailShape shape = state.getValue(rail.getShapeProperty());
 			return switch (shape) {
