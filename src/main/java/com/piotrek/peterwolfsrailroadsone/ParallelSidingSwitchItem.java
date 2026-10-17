@@ -36,7 +36,7 @@ public class ParallelSidingSwitchItem extends Item {
 
 		ParallelSidingSwitchPlacementHelper.Placement placement = ParallelSidingSwitchPlacementHelper.fromUseContext(context, this.variant);
 		if (!ParallelSidingSwitchPlacementHelper.canPlace(level, placement)) {
-			player.sendSystemMessage(Component.translatable("message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch"));
+			player.displayClientMessage(Component.translatable("message.peterwolfs_railroads_one.not_enough_space_parallel_siding_switch"), false);
 			return InteractionResult.FAIL;
 		}
 

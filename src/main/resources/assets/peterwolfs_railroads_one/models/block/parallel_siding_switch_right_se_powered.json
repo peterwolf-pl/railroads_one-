@@ -1,0 +1,6 @@
+{
+  "parent": "peterwolfs_railroads_one:block/template_rail_flat",
+  "textures": {
+    "rail": "peterwolfs_railroads_one:block/parallel_siding_switch_right_se_powered"
+  }
+}

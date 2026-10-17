@@ -12,29 +12,103 @@ public final class CurveMath {
 	public static Vec3 pointOnCurve(final BlockPos anchor, final Direction facing, final CurveTurn turn, final CurveSize size, final double progress) {
 		double t = Mth.clamp(progress, 0.0, 1.0);
 		double radius = size.radius();
-		Vec3 center = curveCenter(anchor, facing, turn, size);
+		double centerX = curveCenterX(anchor, facing, turn, radius);
+		double centerZ = curveCenterZ(anchor, facing, turn, radius);
 		double angle = startAngle(facing, turn) + sweep(turn) * t;
-		return center.add(Math.cos(angle) * radius, 0.08, Math.sin(angle) * radius);
+		return new Vec3(
+			centerX + Math.cos(angle) * radius,
+			anchor.getY() + 0.08D,
+			centerZ + Math.sin(angle) * radius
+		);
 	}
 
 	public static Vec3 tangent(final Direction facing, final CurveTurn turn, final double progress) {
 		double t = Mth.clamp(progress, 0.0, 1.0);
 		double sign = Math.signum(sweep(turn));
 		double angle = startAngle(facing, turn) + sweep(turn) * t;
-		return new Vec3(-Math.sin(angle) * sign, 0.0, Math.cos(angle) * sign).normalize();
+		return new Vec3(-Math.sin(angle) * sign, 0.0, Math.cos(angle) * sign);
 	}
 
 	public static double nearestProgress(final BlockPos anchor, final Direction facing, final CurveTurn turn, final CurveSize size, final Vec3 position) {
-		Vec3 center = curveCenter(anchor, facing, turn, size);
-		double angle = Math.atan2(position.z - center.z, position.x - center.x);
+		return Mth.clamp(nearestProgressExtended(anchor, facing, turn, size, position), 0.0, 1.0);
+	}
+
+	public static double nearestProgressExtended(
+		final BlockPos anchor,
+		final Direction facing,
+		final CurveTurn turn,
+		final CurveSize size,
+		final Vec3 position
+	) {
+		double radius = size.radius();
+		double centerX = curveCenterX(anchor, facing, turn, radius);
+		double centerZ = curveCenterZ(anchor, facing, turn, radius);
+		double angle = Math.atan2(position.z - centerZ, position.x - centerX);
 		double delta = normalizeSigned(angle - startAngle(facing, turn));
 		double progress = delta / sweep(turn);
+		double length = arcLength(size);
+
+		Vec3 start = pointOnCurve(anchor, facing, turn, size, 0.0D);
+		Vec3 entry = tangent(facing, turn, 0.0D);
+		double alongStart = (position.x - start.x) * entry.x + (position.z - start.z) * entry.z;
+		if (alongStart < 0.0D) {
+			return alongStart / length;
+		}
+
+		Vec3 end = pointOnCurve(anchor, facing, turn, size, 1.0D);
+		Vec3 exit = tangent(facing, turn, 1.0D);
+		double alongExit = (position.x - end.x) * exit.x + (position.z - end.z) * exit.z;
+		if (alongExit > 0.0D) {
+			return 1.0D + alongExit / length;
+		}
 		return Mth.clamp(progress, 0.0, 1.0);
 	}
 
+	public static Vec3 pointExtended(
+		final BlockPos anchor,
+		final Direction facing,
+		final CurveTurn turn,
+		final CurveSize size,
+		final double progress
+	) {
+		double length = arcLength(size);
+		if (progress >= 0.0D && progress <= 1.0D) {
+			return pointOnCurve(anchor, facing, turn, size, progress);
+		}
+		if (progress < 0.0D) {
+			return pointOnCurve(anchor, facing, turn, size, 0.0D)
+				.add(tangent(facing, turn, 0.0D).scale(progress * length));
+		}
+		return pointOnCurve(anchor, facing, turn, size, 1.0D)
+			.add(tangent(facing, turn, 1.0D).scale((progress - 1.0D) * length));
+	}
+
+	public static Vec3 tangentExtended(final Direction facing, final CurveTurn turn, final double progress) {
+		if (progress <= 0.0D) {
+			return tangent(facing, turn, 0.0D);
+		}
+		if (progress >= 1.0D) {
+			return tangent(facing, turn, 1.0D);
+		}
+		return tangent(facing, turn, progress);
+	}
+
+	public static double arcLength(final CurveSize size) {
+		return size.radius() * Math.PI / 2.0;
+	}
+
 	public static double progressStepForSpeed(final CurveSize size, final double horizontalSpeed) {
-		double arcLength = size.radius() * Math.PI / 2.0;
-		return Mth.clamp(Math.max(horizontalSpeed, 0.12) / arcLength, 0.025, size == CurveSize.SMALL_2X2 ? 0.24 : 0.18);
+		double length = arcLength(size);
+		return Mth.clamp(Math.max(horizontalSpeed, 0.12) / length, 0.025, size == CurveSize.SMALL_2X2 ? 0.24 : 0.18);
+	}
+
+	public static float yawAlongCurve(
+		final float entryYaw,
+		final CurveTurn turn,
+		final double entryProgress,
+		final double progress
+	) {
+		return entryYaw + (float) (Mth.RAD_TO_DEG * sweep(turn) * (progress - entryProgress));
 	}
 
 	public static double horizontalDistanceSqr(final Vec3 a, final Vec3 b) {
@@ -43,24 +117,23 @@ public final class CurveMath {
 		return x * x + z * z;
 	}
 
-	private static Vec3 curveCenter(final BlockPos anchor, final Direction facing, final CurveTurn turn, final CurveSize size) {
-		Vec3 back = horizontal(facing.getOpposite());
-		Vec3 exit = horizontal(CurvePlacementHelper.exitDirection(facing, turn));
-		return Vec3.atBottomCenterOf(anchor).add(back.scale(size.radius())).add(exit.scale(size.radius()));
+	private static double curveCenterX(final BlockPos anchor, final Direction facing, final CurveTurn turn, final double radius) {
+		Direction exit = CurvePlacementHelper.exitDirection(facing, turn);
+		return anchor.getX() + 0.5D + (facing.getOpposite().getStepX() + exit.getStepX()) * radius;
+	}
+
+	private static double curveCenterZ(final BlockPos anchor, final Direction facing, final CurveTurn turn, final double radius) {
+		Direction exit = CurvePlacementHelper.exitDirection(facing, turn);
+		return anchor.getZ() + 0.5D + (facing.getOpposite().getStepZ() + exit.getStepZ()) * radius;
 	}
 
 	private static double startAngle(final Direction facing, final CurveTurn turn) {
-		Vec3 exit = horizontal(CurvePlacementHelper.exitDirection(facing, turn));
-		Vec3 startVector = exit.scale(-1.0);
-		return Math.atan2(startVector.z, startVector.x);
+		Direction exit = CurvePlacementHelper.exitDirection(facing, turn);
+		return Math.atan2(-exit.getStepZ(), -exit.getStepX());
 	}
 
 	private static double sweep(final CurveTurn turn) {
 		return turn == CurveTurn.RIGHT ? Math.PI / 2.0 : -Math.PI / 2.0;
-	}
-
-	private static Vec3 horizontal(final Direction direction) {
-		return new Vec3(direction.getStepX(), 0.0, direction.getStepZ());
 	}
 
 	private static double normalizeSigned(double angle) {

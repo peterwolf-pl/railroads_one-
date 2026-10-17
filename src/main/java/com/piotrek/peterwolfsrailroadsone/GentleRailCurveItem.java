@@ -38,7 +38,7 @@ public class GentleRailCurveItem extends Item {
 
 		CurvePlacementHelper.Placement placement = CurvePlacementHelper.fromUseContext(context, this.turn, this.size);
 		if (!CurvePlacementHelper.canPlace(level, placement)) {
-			player.sendSystemMessage(Component.translatable("message.peterwolfs_railroads_one.not_enough_space_" + this.size.label()));
+			player.displayClientMessage(Component.translatable("message.peterwolfs_railroads_one.not_enough_space_" + this.size.label()), false);
 			return InteractionResult.FAIL;
 		}
 

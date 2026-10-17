@@ -30,6 +30,18 @@ public final class ModBlocks {
 				.setId(key)
 		)
 	);
+	public static final StraightRailBlock STRAIGHT_RAIL = registerBlock(
+		"straight_rail",
+		key -> new StraightRailBlock(
+			BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.7F).sound(SoundType.METAL).setId(key)
+		)
+	);
+	public static final CrossingRailBlock CROSSING_RAIL = registerBlock(
+		"crossing_rail",
+		key -> new CrossingRailBlock(
+			BlockBehaviour.Properties.of().noCollision().noOcclusion().strength(0.7F).sound(SoundType.METAL).setId(key)
+		)
+	);
 
 	private ModBlocks() {
 	}

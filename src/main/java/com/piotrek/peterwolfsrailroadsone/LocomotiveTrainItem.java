@@ -9,7 +9,9 @@ import java.util.function.Consumer;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.stats.Stats;
 import net.minecraft.tags.BlockTags;
@@ -69,7 +71,7 @@ public final class LocomotiveTrainItem extends Item {
 			serverLevel,
 			placement.locomotivePos(),
 			serverLevel.getBlockState(placement.locomotivePos()),
-			EntityType.FURNACE_MINECART,
+			furnaceMinecartType(),
 			itemStack,
 			context.getPlayer()
 		);
@@ -84,7 +86,7 @@ public final class LocomotiveTrainItem extends Item {
 				serverLevel,
 				minecartRailPos,
 				serverLevel.getBlockState(minecartRailPos),
-				EntityType.MINECART,
+				minecartType(),
 				new ItemStack(Items.MINECART),
 				context.getPlayer()
 			);
@@ -186,6 +188,16 @@ public final class LocomotiveTrainItem extends Item {
 		);
 	}
 
+	@SuppressWarnings("unchecked")
+	private static EntityType<MinecartFurnace> furnaceMinecartType() {
+		return (EntityType<MinecartFurnace>) BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("furnace_minecart"));
+	}
+
+	@SuppressWarnings("unchecked")
+	private static EntityType<Minecart> minecartType() {
+		return (EntityType<Minecart>) BuiltInRegistries.ENTITY_TYPE.getValue(Identifier.withDefaultNamespace("minecart"));
+	}
+
 	private static boolean hasMinecartCollision(final Level level, final AbstractMinecart minecart) {
 		if (!AbstractMinecart.useExperimentalMovement(level)) {
 			return false;
@@ -268,7 +280,7 @@ public final class LocomotiveTrainItem extends Item {
 
 	private static void displayMessage(final Player player, final String translationKey) {
 		if (player != null) {
-			player.sendOverlayMessage(Component.translatable(translationKey));
+			player.displayClientMessage(Component.translatable(translationKey), true);
 		}
 	}
 
